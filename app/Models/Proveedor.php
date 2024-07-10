@@ -2,20 +2,17 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Proveedor extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
-        'nombre',
-        'nombre_empresa',
-        'direccion',
-        'dni',
-        'celular',
-        'catalogo_productos',
-        'user_id',
+        'nombre', 'nombre_empresa',
+         'dni', 'celular', 'direccion', 'user_id'
     ];
+
+    public function categorias()
+    {
+        return $this->belongsToMany(Categoria::class, 'categoria_proveedor');
+    }
 }

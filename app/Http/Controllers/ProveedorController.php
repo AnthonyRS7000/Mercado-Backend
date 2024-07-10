@@ -14,13 +14,13 @@ class ProveedorController extends Controller
 {
     public function index()
     {
-        $Proveedors = Proveedor::all();
+        $Proveedors = Proveedor::with('categorias')->get();
         return response()->json($Proveedors, 200);
     }
 
     public function show($id)
     {
-        $Proveedor = Proveedor::find($id);
+        $Proveedor = Proveedor::with('categorias')->find($id);
 
         if (!$Proveedor) {
             return response()->json(['error' => 'Proveedor no encontrado.'], 404);
@@ -34,25 +34,26 @@ class ProveedorController extends Controller
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:255',
             'nombre_empresa' => 'required|string|max:255',
-            'dni' => 'required|string|max:255|unique:Proveedors,dni',
-            'celular' => 'required|string|max:255|unique:Proveedors,celular',
+            'dni' => 'required|string|max:255|unique:proveedors,dni',
+            'celular' => 'required|string|max:255|unique:proveedors,celular',
             'direccion' => 'required|string|max:255',
-            'catalogo_productos' => 'nullable|string|max:255',
+            'ids' => 'required|array',
+            'ids.*' => 'exists:categorias,id',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
         ]);
-    
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-    
+
         // Obtener el objeto Role con num_rol = 1
         $role = Role::where('num_rol', 2)->first();
-    
+
         if (!$role) {
             return response()->json(['error' => 'El rol no existe.'], 404);
         }
-    
+
         // Crear usuario con num_rol = 1 por defecto
         $user = User::create([
             'name' => $request->nombre,
@@ -60,7 +61,7 @@ class ProveedorController extends Controller
             'password' => Hash::make($request->password),
             'role_id' => $role->id, // Asignar el id del rol correspondiente al valor de num_rol
         ]);
-    
+
         // Crear Proveedor asociado
         $Proveedor = Proveedor::create([
             'nombre' => $request->nombre,
@@ -68,14 +69,15 @@ class ProveedorController extends Controller
             'dni' => $request->dni,
             'celular' => $request->celular,
             'direccion' => $request->direccion,
-            'catalogo_productos' => $request->catalogo_productos,
             'user_id' => $user->id,
         ]);
-    
+
+        // Asignar categorías
+        $Proveedor->categorias()->sync($request->ids);
+
         return response()->json(['user' => $user, 'Proveedor' => $Proveedor], 201);
     }
-    
-    
+
     public function update(Request $request, $id)
     {
         $Proveedor = Proveedor::find($id);
@@ -87,14 +89,19 @@ class ProveedorController extends Controller
         $validatedData = $request->validate([
             'nombre' => 'sometimes|required|string|max:255',
             'nombre_empresa' => 'required|string|max:255',
-            'dni' => 'sometimes|required|string|max:255|unique:Proveedors,dni,' . $id,
-            'celular' => 'sometimes|required|string|max:255|unique:Proveedors,celular,' . $id,
+            'dni' => 'sometimes|required|string|max:255|unique:proveedors,dni,' . $id,
+            'celular' => 'sometimes|required|string|max:255|unique:proveedors,celular,' . $id,
             'direccion' => 'sometimes|required|string|max:255',
-            'catalogo_productos' => 'nullable|string|max:255',
+            'ids' => 'sometimes|required|array',
+            'ids.*' => 'exists:categorias,id',
             'user_id' => 'sometimes|required|exists:users,id',
         ]);
 
         $Proveedor->update($validatedData);
+
+        if ($request->has('ids')) {
+            $Proveedor->categorias()->sync($request->ids);
+        }
 
         return response()->json($Proveedor, 200);
     }
@@ -111,4 +118,17 @@ class ProveedorController extends Controller
 
         return response()->json(['message' => 'Proveedor eliminado exitosamente.'], 200);
     }
+    
+    public function proveedorPorId($id)
+    {
+        $proveedor = Proveedor::with('categorias')->find($id);
+
+        if (!$proveedor) {
+            return response()->json(['error' => 'Proveedor no encontrado.'], 404);
+        }
+
+        return response()->json($proveedor, 200);
+    }
+
+
 }

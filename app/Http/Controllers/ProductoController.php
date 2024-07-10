@@ -81,5 +81,57 @@ class ProductoController extends Controller
         return response()->json($producto, 201);
     }
 
-    // Otros métodos no mostrados por brevedad
+    public function productosPorProveedor($proveedor_id)
+    {
+        $productos = Producto::with('categoria')->where('proveedor_id', $proveedor_id)->get();
+
+        if ($productos->isEmpty()) {
+            return response()->json(['error' => 'No se encontraron productos para este proveedor.'], 404);
+        }
+
+        return response()->json($productos, 200);
+    }
+
+    public function productosPorCategoria($categoria_id)
+    {
+        $productos = Producto::with('categoria')->where('categoria_id', $categoria_id)->get();
+
+        if ($productos->isEmpty()) {
+            return response()->json(['error' => 'No se encontraron productos para esta categoría.'], 404);
+        }
+
+        return response()->json($productos, 200);
+    }
+
+
+
+    // Función para calcular el precio basado en la cantidad
+    public function calcularPrecio(Request $request, $id)
+    {
+        $producto = Producto::find($id);
+
+        if (!$producto) {
+            return response()->json(['error' => 'Producto no encontrado.'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'cantidad' => 'required|numeric|min:0.01', // La cantidad debe ser numérica y mayor que 0
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $cantidad = $request->cantidad;
+        $precioTotal = $producto->precio * $cantidad;
+
+        return response()->json([
+            'producto_id' => $producto->id,
+            'nombre' => $producto->nombre,
+            'tipo' => $producto->tipo,
+            'cantidad' => $cantidad,
+            'precio_total' => $precioTotal,
+        ], 200);
+    }
+
 }

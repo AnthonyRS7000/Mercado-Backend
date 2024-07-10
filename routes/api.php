@@ -30,7 +30,18 @@ use App\Http\Controllers\PedidoController as Pedido;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/productos', [Producto::class, 'index']);
+
+//Productos
 Route::get('/categoria-productos', [Categoria::class, 'todasLasCategoriasConProductos']);
+Route::post('/calcular-precio/{id}', [Producto::class, 'calcularPrecio']);
+
+//carrito
+Route::get('/carrito', [ProductosCarritoController::class, 'index']);
+Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']);
+Route::put('/carrito/{id}', [ProductosCarritoController::class, 'actualizar']);
+Route::delete('/carrito/{id}', [ProductosCarritoController::class, 'eliminar']);
+Route::delete('/carrito/vaciar', [ProductosCarritoController::class, 'vaciar']);
+Route::post('/carrito/transferir', [ProductosCarritoController::class, 'transferirCarrito']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // Estas rutas requieren autenticación
@@ -54,6 +65,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/productos/{id}', [Producto::class, 'destroy']);
     Route::post('/compra-peso/{id}', [Producto::class, 'compra_peso']);
     Route::post('/compra-unidad/{id}', [Producto::class, 'compra_unidad']);
+    Route::get('/productos-proveedor/{id}', [Producto::class, 'productosPorProveedor']);
+    Route::get('/productos-categoria/{id}', [Producto::class, 'productosPorCategoria']);
 
 
     Route::apiResource('/v1/categorias', Categoria::class);
@@ -63,16 +76,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/pedidos', [Pedido::class, 'store']);
 
     //CARRITO
-    Route::get('/carrito', [ProductosCarritoController::class, 'index']); // Mostrar el carrito
-    Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']); // Agregar producto al carrito
-    Route::put('/carrito/{id}', [ProductosCarritoController::class, 'actualizar']); // Actualizar cantidad de un producto en el carrito
-    Route::delete('/carrito/{id}', [ProductosCarritoController::class, 'eliminar']); // Eliminar producto del carrito
-    Route::delete('/carrito/vaciar', [ProductosCarritoController::class, 'vaciar']); // Vaciar carrito
+    // Route::get('/carrito', [ProductosCarritoController::class, 'index']); // Mostrar el carrito
+    // Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']); // Agregar producto al carrito
+    // Route::put('/carrito/{id}', [ProductosCarritoController::class, 'actualizar']); // Actualizar cantidad de un producto en el carrito
+    // Route::delete('/carrito/{id}', [ProductosCarritoController::class, 'eliminar']); // Eliminar producto del carrito
+    // Route::delete('/carrito/vaciar', [ProductosCarritoController::class, 'vaciar']); // Vaciar carrito
 
     //Delivery
     Route::put('/modificar-estado-pedido', [DeliveryController::class, 'updatePedidoEstado']);
 
-    
+    //Proveedor
+    Route::get('/proveedor/{id}', [Proveedor::class, 'proveedorPorId']);
+
 });
 
 

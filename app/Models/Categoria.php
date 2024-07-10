@@ -8,8 +8,8 @@ class Categoria extends Model
 {
     protected $fillable = ['nombre'];
 
-    public function productos()
+    public function proveedores()
     {
-        return $this->hasMany(Producto::class);
+        return $this->belongsToMany(Proveedor::class, 'categoria_proveedor');
     }
 }
