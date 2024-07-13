@@ -15,55 +15,70 @@ class ProductosCarritoController extends Controller
     public function index(Request $request)
     {
         $uuid = $request->query('uuid'); // Recibir el UUID como parámetro de consulta
-
+    
         if (!$uuid) {
             return response()->json(['message' => 'UUID es requerido'], 400);
         }
-
+    
         $carrito = Carrito::where('uuid', $uuid)->first();
-
+    
         if (!$carrito) {
             return response()->json(['message' => 'Carrito no encontrado'], 404);
         }
-
+    
         $productosCarrito = productos_carrito::where('carrito_id', $carrito->id)->get();
-
+    
         if ($productosCarrito->isEmpty()) {
             return response()->json(['message' => 'El carrito está vacío'], 200);
         }
-
-        return response()->json($productosCarrito, 200);
+    
+        $cantidadTotal = $productosCarrito->sum('cantidad');
+        $totalPrecio = $productosCarrito->sum('total');
+    
+        return response()->json([
+            'productos' => $productosCarrito,
+            'cantidad_total' => $cantidadTotal,
+            'total_precio' => $totalPrecio
+        ], 200);
     }
-
-    // Agregar producto al carrito
-// src/Http/Controllers/ProductosCarritoController.php
 
     public function agregar(Request $request)
     {
-        // Obtener o generar el carrito con UUID
+        // Validar la solicitud
+        $request->validate([
+            'producto_id' => 'required|exists:productos,id',
+            'cantidad' => 'required|numeric|min:0.01',
+            'uuid' => 'required|uuid'
+        ]);
+
+        // Obtener o crear el carrito con UUID
         $carrito = Carrito::firstOrCreate(
             ['uuid' => $request->uuid],
             ['uuid' => $request->uuid]
         );
-        
+
         $producto = Producto::find($request->producto_id);
 
         if (!$producto) {
             return response()->json(['message' => 'Producto no encontrado'], 404);
         }
 
-        $productosCarrito = productos_carrito::create([
-            'carrito_id' => $carrito->id,
-            'producto_id' => $request->producto_id,
-            'cantidad' => $request->cantidad,
-            'fecha_agrego' => now(),
-            'total' => $producto->precio * $request->cantidad,
-            'estado' => 0 // Asignar un valor entero en lugar de 'pendiente'
-        ]);
+        // Crear o actualizar el producto en el carrito
+        $productosCarrito = productos_carrito::updateOrCreate(
+            [
+                'carrito_id' => $carrito->id,
+                'producto_id' => $request->producto_id
+            ],
+            [
+                'cantidad' => $request->cantidad,
+                'fecha_agrego' => now(),
+                'total' => $producto->precio * $request->cantidad,
+                'estado' => 1 // o el valor correspondiente según tu lógica
+            ]
+        );
 
         return response()->json(['message' => 'Producto agregado al carrito', 'carrito' => $productosCarrito, 'uuid' => $carrito->uuid], 200);
     }
-
 
     // Actualizar cantidad de un producto en el carrito
     public function actualizar(Request $request, $id)
@@ -95,30 +110,23 @@ class ProductosCarritoController extends Controller
         return response()->json(['message' => 'Producto eliminado del carrito'], 200);
     }
 
-    // Vaciar carrito
     public function vaciar(Request $request)
     {
-        $carrito = $this->getCarrito();
-        productos_carrito::where('carrito_id', $carrito->id)->delete();
-
-        return response()->json(['message' => 'Carrito vaciado'], 200);
-    }
-
-    // Transferir productos del carrito temporal al cliente autenticado
-    public function transferirCarrito(Request $request)
-    {
-        if (Auth::check()) {
-            $carrito = $this->getCarrito();
-            $carrito->cliente_id = Auth::id();
-            $carrito->save();
-
-            // Limpiar el carrito_id temporal de la sesión
-            Session::forget('carrito_id');
-
-            return response()->json(['message' => 'Carrito transferido exitosamente'], 200);
+        $uuid = $request->input('uuid');
+        
+        if (!$uuid) {
+            return response()->json(['message' => 'UUID es requerido'], 400);
         }
-
-        return response()->json(['message' => 'Usuario no autenticado'], 401);
+    
+        $carrito = Carrito::where('uuid', $uuid)->first();
+    
+        if (!$carrito) {
+            return response()->json(['message' => 'Carrito no encontrado'], 404);
+        }
+    
+        productos_carrito::where('carrito_id', $carrito->id)->delete();
+    
+        return response()->json(['message' => 'Carrito vaciado'], 200);
     }
 
     // Método para obtener el carrito, generando uno si es necesario
@@ -137,7 +145,86 @@ class ProductosCarritoController extends Controller
 
         return $carrito;
     }
+
+    public function mergeCart(Request $request)
+    {
+        $uuid = $request->input('uuid');
+        $user_id = $request->input('user_id'); // Obtener el ID del usuario desde la solicitud
+    
+        if (!$uuid || !$user_id) {
+            return response()->json(['message' => 'UUID y user_id son requeridos'], 400);
+        }
+    
+        $guestCart = Carrito::where('uuid', $uuid)->first();
+        $userCart = Carrito::where('user_id', $user_id)->first();
+    
+        if (!$guestCart) {
+            return response()->json(['message' => 'Carrito de invitado no encontrado'], 404);
+        }
+    
+        if ($guestCart && $userCart) {
+            // Si ambos carritos existen, combinar los productos
+            foreach ($guestCart->productos as $product) {
+                $existingProduct = $userCart->productos->where('producto_id', $product->pivot->producto_id)->first();
+                if ($existingProduct) {
+                    // Actualizar cantidad y total si el producto ya existe en el carrito del usuario
+                    $existingProduct->pivot->cantidad += $product->pivot->cantidad;
+                    $existingProduct->pivot->total += $product->pivot->total;
+                    $existingProduct->pivot->save();
+                } else {
+                    // Agregar nuevo producto al carrito del usuario
+                    $userCart->productos()->attach($product->pivot->producto_id, [
+                        'cantidad' => $product->pivot->cantidad,
+                        'total' => $product->pivot->total,
+                        'fecha_agrego' => now()
+                    ]);
+                }
+            }
+            $guestCart->delete(); // Eliminar el carrito de invitado después de combinar
+        } elseif ($guestCart) {
+            // Si solo existe el carrito de invitado, asignarlo al usuario autenticado
+            $guestCart->user_id = $user_id;
+            $guestCart->uuid = null; // Limpiar el UUID ya que ahora está asociado al cliente
+            $guestCart->save();
+        }
+    
+        return response()->json(['message' => 'Carrito combinado exitosamente'], 200);
+    }
+
+
+    public function getCartByUserId($userId)
+    {
+        try {
+            $carrito = Carrito::where('user_id', $userId)->first();
+    
+            if (!$carrito) {
+                return response()->json(['message' => 'Carrito no encontrado'], 404);
+            }
+    
+            $productosCarrito = productos_carrito::where('carrito_id', $carrito->id)->get();
+    
+            if ($productosCarrito->isEmpty()) {
+                return response()->json(['message' => 'El carrito está vacío'], 200);
+            }
+    
+            $cantidadTotal = $productosCarrito->sum('cantidad');
+            $totalPrecio = $productosCarrito->sum('total');
+    
+            return response()->json([
+                'productos' => $productosCarrito,
+                'cantidad_total' => $cantidadTotal,
+                'total_precio' => $totalPrecio,
+                'uuid' => $carrito->uuid,
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error interno del servidor', 'error' => $e->getMessage()], 500);
+        }
+    }
+    
+
 }
+
+
 
 
 

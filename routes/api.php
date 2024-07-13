@@ -35,12 +35,15 @@ Route::get('/productos', [Producto::class, 'index']);
 Route::get('/categoria-productos', [Categoria::class, 'todasLasCategoriasConProductos']);
 Route::post('/calcular-precio/{id}', [Producto::class, 'calcularPrecio']);
 
+//categoria 
+Route::apiResource('/v1/categorias', Categoria::class);
+
 //carrito
 Route::get('/carrito', [ProductosCarritoController::class, 'index']);
 Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']);
 Route::put('/carrito/{id}', [ProductosCarritoController::class, 'actualizar']);
-Route::delete('/carrito/{id}', [ProductosCarritoController::class, 'eliminar']);
-Route::delete('/carrito/vaciar', [ProductosCarritoController::class, 'vaciar']);
+Route::delete('/carrito-eliminar/{id}', [ProductosCarritoController::class, 'eliminar']);
+Route::post('/carrito/vaciar', [ProductosCarritoController::class, 'vaciar']);
 Route::post('/carrito/transferir', [ProductosCarritoController::class, 'transferirCarrito']);
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -55,6 +58,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('/v1/proveedor', Proveedor::class);
     Route::apiResource('/v1/apoyo', Apoyo::class);
     Route::apiResource('/v1/delivery', Delivery::class);
+    Route::post('/logout', [AuthController::class, 'logout']);
+    
     //VENTA
 
     //PRODUCTO
@@ -69,13 +74,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/productos-categoria/{id}', [Producto::class, 'productosPorCategoria']);
 
 
-    Route::apiResource('/v1/categorias', Categoria::class);
     Route::put('/categorias/{id}', [Categoria::class, 'update']);
 
     //COMPRA
     Route::post('/pedidos', [Pedido::class, 'store']);
 
     //CARRITO
+    Route::post('/carrito/merge', [ProductosCarritoController::class, 'mergeCart']);
+    Route::get('/carrito/{userId}', [ProductosCarritoController::class, 'getCartByUserId']);
     // Route::get('/carrito', [ProductosCarritoController::class, 'index']); // Mostrar el carrito
     // Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']); // Agregar producto al carrito
     // Route::put('/carrito/{id}', [ProductosCarritoController::class, 'actualizar']); // Actualizar cantidad de un producto en el carrito

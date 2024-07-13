@@ -16,4 +16,9 @@ class Cliente extends Model
         'preferencias_compra',
         'user_id',
     ];
+
+    public function carritos()
+    {
+        return $this->hasMany(Carrito::class, 'cliente_id');
+    }
 }

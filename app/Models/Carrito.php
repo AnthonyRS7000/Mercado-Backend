@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
+use App\Models\productos_carrito;
 
 class Carrito extends Model
 {
@@ -16,6 +16,17 @@ class Carrito extends Model
 
     public function productosCarrito()
     {
-        return $this->hasMany(Productos_Carrito::class);
+        return $this->hasMany(productos_carrito::class);
+    }
+
+    public function productos()
+    {
+        return $this->belongsToMany(Producto::class, 'productos_carrito', 'carrito_id', 'producto_id')
+                    ->withPivot('cantidad', 'total', 'fecha_agrego', 'estado');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

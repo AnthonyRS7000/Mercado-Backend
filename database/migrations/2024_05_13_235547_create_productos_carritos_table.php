@@ -18,7 +18,7 @@ return new class extends Migration
             $table->integer('cantidad');
             $table->timestamp('fecha_agrego');
             $table->decimal('total', 10, 2);
-            $table->integer('estado');
+            $table->integer('estado')->default(1)->change();
             $table->timestamps();
         });
     }

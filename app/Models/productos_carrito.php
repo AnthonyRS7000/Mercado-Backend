@@ -9,23 +9,22 @@ class productos_carrito extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'cantidad',
-        'fecha_agrego',
-        'total',
-        'estado',
-        'cliente_id',
-        'producto_id',
-        'carrito_id' // Añadir carrito_id a los fillables
-    ];
+    protected $table = 'productos_carritos'; // Asegúrate de que el nombre de la tabla sea correcto
 
-    public function producto()
-    {
-        return $this->belongsTo(Producto::class);
-    }
+    protected $fillable = [
+        'carrito_id', 'producto_id',
+        'cantidad', 'total', 
+        'fecha_agrego',
+        'estado'
+    ];
 
     public function carrito()
     {
         return $this->belongsTo(Carrito::class);
+    }
+
+    public function producto()
+    {
+        return $this->belongsTo(Producto::class);
     }
 }

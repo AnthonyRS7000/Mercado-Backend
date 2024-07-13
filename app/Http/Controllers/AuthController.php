@@ -26,22 +26,17 @@ class AuthController extends Controller
             return response()->json(['error' => 'Credenciales inválidas.'], 401);
         }
 
-        // Obtener el usuario autenticado
         $user = Auth::user();
 
-        // Verificar si el usuario tiene un rol asignado
         if (!$user->role) {
             return response()->json(['error' => 'El usuario no tiene un rol asignado.'], 401);
         }
 
-        // Obtener el num_rol del rol asociado al usuario
         $numRol = $user->role->num_rol;
 
-        // Determinar el tipo de usuario y los datos relacionados
         $userType = null;
         $relatedData = null;
 
-        // Determinar el tipo de usuario y datos relacionados según la relación existente
         if ($user->cliente) {
             $userType = 'Cliente';
             $relatedData = $user->cliente;
@@ -56,6 +51,19 @@ class AuthController extends Controller
             $relatedData = $user->personalSistema;
         }
 
+        // Actualizar carrito para el cliente
+        $uuid = $request->input('carrito_uuid');
+        if ($uuid) {
+            \DB::table('carritos')
+                ->where('uuid', $uuid)
+                ->update(['user_id' => $user->id]); // Cambiado a user_id
+        }
+
+        // Obtener el uuid del carrito del cliente si existe
+        $carrito = \DB::table('carritos')
+            ->where('user_id', $user->id) // Cambiado a user_id
+            ->first();
+
         return response()->json([
             'access_token' => $user->createToken('auth_token')->plainTextToken,
             'token_type' => 'Bearer',
@@ -65,7 +73,18 @@ class AuthController extends Controller
                 'num_rol' => $numRol,
                 'user_type' => $userType,
                 'related_data' => $relatedData,
+                'carrito_uuid' => $carrito ? $carrito->uuid : null,
             ],
         ], 200);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+        \DB::table('carritos')
+            ->where('user_id', $request->user()->id) // Cambiado a user_id
+            ->update(['uuid' => null]);
+
+        return response()->json(['message' => 'Successfully logged out']);
     }
 }

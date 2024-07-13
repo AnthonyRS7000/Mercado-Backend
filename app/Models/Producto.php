@@ -14,4 +14,10 @@ class Producto extends Model
     {
         return $this->belongsTo(Categoria::class);
     }
+
+        public function carritos()
+    {
+        return $this->belongsToMany(Carrito::class, 'productos_carritos', 'producto_id', 'carrito_id')
+                    ->withPivot('cantidad', 'total', 'fecha_agrego', 'estado');
+    }
 }
