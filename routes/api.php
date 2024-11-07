@@ -16,6 +16,7 @@ use App\Http\Controllers\PedidoController as Pedido;
 
 
 
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -41,10 +42,11 @@ Route::apiResource('/v1/categorias', Categoria::class);
 //carrito
 Route::get('/carrito', [ProductosCarritoController::class, 'index']);
 Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']);
-Route::put('/carrito/{id}', [ProductosCarritoController::class, 'actualizar']);
-Route::delete('/carrito-eliminar/{id}', [ProductosCarritoController::class, 'eliminar']);
+Route::put('/carrito-actualizar/{carritoId}/{productoId}', [ProductosCarritoController::class, 'actualizar']);
+Route::delete('/carrito-eliminar/{carritoId}/{productoId}', [ProductosCarritoController::class, 'eliminar']);
 Route::post('/carrito/vaciar', [ProductosCarritoController::class, 'vaciar']);
 Route::post('/carrito/transferir', [ProductosCarritoController::class, 'transferirCarrito']);
+Route::get('/carrito/uuid/{uuid}', [ProductosCarritoController::class, 'getCartByUuid']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // Estas rutas requieren autenticación
@@ -81,7 +83,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //CARRITO
     Route::post('/carrito/merge', [ProductosCarritoController::class, 'mergeCart']);
-    Route::get('/carrito/{userId}', [ProductosCarritoController::class, 'getCartByUserId']);
+    Route::get('/carrito/user/{userId}', [ProductosCarritoController::class, 'getCartByUserId']);
     // Route::get('/carrito', [ProductosCarritoController::class, 'index']); // Mostrar el carrito
     // Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']); // Agregar producto al carrito
     // Route::put('/carrito/{id}', [ProductosCarritoController::class, 'actualizar']); // Actualizar cantidad de un producto en el carrito
@@ -94,6 +96,9 @@ Route::middleware('auth:sanctum')->group(function () {
     //Proveedor
     Route::get('/proveedor/{id}', [Proveedor::class, 'proveedorPorId']);
 
+    //pedido
+    Route::get('/pedidos/ultimo/{userId}', [Pedido::class, 'getLastPedido']);
+    Route::get('/pedidos/{userId}', [Pedido::class, 'getPedidosByUserId']);
 });
 
 

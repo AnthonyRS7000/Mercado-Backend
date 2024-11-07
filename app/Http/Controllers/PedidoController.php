@@ -16,7 +16,7 @@ class PedidoController extends Controller
             'fecha' => 'required|date',
             'estado' => 'required|integer',
             'direccion_entrega' => 'required|string|max:255',
-            'cliente_id' => 'required|exists:clientes,id',
+            'user_id' => 'required|exists:users,id', // Cambiado de cliente_id a user_id
             'metodo_pago_id' => 'required|exists:metodo_pagos,id',
             'productos' => 'required|array',
             'productos.*.producto_id' => 'required|exists:productos,id',
@@ -31,7 +31,7 @@ class PedidoController extends Controller
             'fecha' => $request->fecha,
             'estado' => $request->estado,
             'direccion_entrega' => $request->direccion_entrega,
-            'cliente_id' => $request->cliente_id,
+            'user_id' => $request->user_id, // Cambiado de cliente_id a user_id
             'metodo_pago_id' => $request->metodo_pago_id,
             'total' => 0
         ]);
@@ -58,5 +58,34 @@ class PedidoController extends Controller
         $pedido->save();
 
         return response()->json($pedido->load('detalles_pedido.producto'), 201);
+    }
+
+    public function getLastPedido($userId)
+    {
+        $pedido = Pedido::where('user_id', $userId)
+                        ->with('detalles_pedido.producto')
+                        ->latest()
+                        ->first();
+
+        if (!$pedido) {
+            return response()->json(['message' => 'No se encontró ningún pedido.'], 404);
+        }
+
+        return response()->json($pedido, 200);
+    }
+
+    public function getPedidosByUserId($userId)
+    {
+        $pedidos = Pedido::where('user_id', $userId)
+                         ->where('estado', '<>', 4) // Filtrar pedidos que no estén en estado "Entregado"
+                         ->with('detalles_pedido.producto')
+                         ->orderBy('created_at', 'desc')
+                         ->get();
+
+        if ($pedidos->isEmpty()) {
+            return response()->json(['message' => 'No se encontraron pedidos para este usuario.'], 404);
+        }
+
+        return response()->json($pedidos, 200);
     }
 }

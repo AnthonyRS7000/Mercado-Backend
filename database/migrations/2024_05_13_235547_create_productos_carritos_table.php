@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('carrito_id')->constrained('carritos')->onDelete('cascade');
             $table->foreignId('producto_id')->constrained('productos')->onDelete('cascade');
-            $table->integer('cantidad');
+            $table->decimal('cantidad', 10, 3);
             $table->timestamp('fecha_agrego');
             $table->decimal('total', 10, 2);
             $table->integer('estado')->default(1)->change();
