@@ -77,7 +77,7 @@ class PedidoController extends Controller
     public function getPedidosByUserId($userId)
     {
         $pedidos = Pedido::where('user_id', $userId)
-                         ->where('estado', '<>', 4) // Filtrar pedidos que no estén en estado "Entregado"
+                         ->where('estado', '<>', 5) // Filtrar pedidos que no estén en estado "Entregado"
                          ->with('detalles_pedido.producto')
                          ->orderBy('created_at', 'desc')
                          ->get();
@@ -88,4 +88,17 @@ class PedidoController extends Controller
 
         return response()->json($pedidos, 200);
     }
+
+    public function getPedidosPendientes()
+    {
+        $pedidos = Pedido::where('estado', 2)->with('detalles_pedido.producto')->get();
+        \Log::info('Pedidos con estado 2:', $pedidos->toArray());
+    
+        return $pedidos->isEmpty()
+            ? response()->json(['message' => 'No se encontraron pedidos pendientes.'], 404)
+            : response()->json($pedidos, 200);
+    }
+    
+    
+    
 }

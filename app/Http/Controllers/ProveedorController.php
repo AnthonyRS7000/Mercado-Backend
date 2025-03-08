@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Proveedor;
+use App\Models\Pedido;
 use App\Models\User;
 use App\Models\Role;
 use Illuminate\Http\Request;
@@ -130,5 +131,23 @@ class ProveedorController extends Controller
         return response()->json($proveedor, 200);
     }
 
-
+    public function pedidosPorProveedor($id)
+    {
+        $pedidos = Pedido::whereHas('detalles_pedido.producto', function ($query) use ($id) {
+                $query->where('proveedor_id', $id);
+            })
+            ->with([
+                'detalles_pedido' => function ($query) use ($id) {
+                    $query->whereHas('producto', function ($subQuery) use ($id) {
+                        $subQuery->where('proveedor_id', $id);
+                    });
+                },
+                'detalles_pedido.producto',
+                'user:id,name'
+            ])
+            ->orderBy('created_at', 'asc')
+            ->get();
+    
+        return response()->json($pedidos);
+    }
 }

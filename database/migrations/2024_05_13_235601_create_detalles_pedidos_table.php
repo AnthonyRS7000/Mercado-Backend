@@ -16,6 +16,7 @@ return new class extends Migration
             $table->decimal('cantidad', 10, 3);
             $table->decimal('precio_unitario', 10, 2);
             $table->decimal('subtotal', 10, 2);
+            $table->boolean('notificado_proveedor')->default(false);
             $table->foreignId('pedido_id')->constrained()->onDelete('cascade');
             $table->foreignId('producto_id')->constrained()->onDelete('cascade');
             $table->timestamps();

@@ -13,6 +13,7 @@ use App\Http\Controllers\DeliveryController as Delivery;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\ProductoController as Producto;
 use App\Http\Controllers\PedidoController as Pedido;
+use App\Http\Controllers\EntregaController as Entregar;
 
 
 
@@ -92,13 +93,21 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //Delivery
     Route::put('/modificar-estado-pedido', [DeliveryController::class, 'updatePedidoEstado']);
-
+    Route::get('/pedidos/pendientes', [DeliveryController::class, 'getPedidosPendientes']);
+    
     //Proveedor
     Route::get('/proveedor/{id}', [Proveedor::class, 'proveedorPorId']);
+    Route::put('/pedidos/notificar-recolector/{pedido_id}', [Entregar::class, 'notificarRecolector']);
+    Route::get('/pedidos/proveedor/{id}', [Entregar::class, 'pedidosPorProveedor']);
+    
+    //Personal_sistema(recolector)
+    Route::get('/recolector/pedidos-notificados/{id}', [Apoyo::class, 'pedidosNotificados']);
+
 
     //pedido
     Route::get('/pedidos/ultimo/{userId}', [Pedido::class, 'getLastPedido']);
     Route::get('/pedidos/{userId}', [Pedido::class, 'getPedidosByUserId']);
+
 });
 
 

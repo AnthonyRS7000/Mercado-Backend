@@ -8,6 +8,10 @@ use App\Models\Producto;
 use App\Models\Carrito;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
+use App\Models\Cliente;
+use App\Models\Proveedor;
+use App\Models\Personal_sistema;
+use App\Models\Delivery;
 use Illuminate\Support\Facades\Auth;
 
 class ProductosCarritoController extends Controller
@@ -58,7 +62,6 @@ class ProductosCarritoController extends Controller
 
     public function agregar(Request $request)
     {
-        // Validar la solicitud
         $request->validate([
             'producto_id' => 'required|exists:productos,id',
             'cantidad' => 'required|numeric|min:0.01',
@@ -66,11 +69,17 @@ class ProductosCarritoController extends Controller
             'user_id' => 'sometimes|exists:users,id',
         ]);
     
-        // Obtener o crear el carrito con user_id o uuid
-        if ($request->has('user_id')) {
+        // Verificar si el user_id existe en otras tablas de roles
+        $user_id = $request->user_id;
+        $esCliente = Cliente::where('user_id', $user_id)->exists();
+        $esProveedor = Proveedor::where('user_id', $user_id)->exists();
+        $esRecolector = Personal_sistema::where('user_id', $user_id)->exists();
+        $esRepartidor = Delivery::where('user_id', $user_id)->exists();
+    
+        if ($user_id && ($esCliente || $esProveedor || $esRecolector || $esRepartidor)) {
             $carrito = Carrito::firstOrCreate(
-                ['user_id' => $request->user_id],
-                ['user_id' => $request->user_id]
+                ['user_id' => $user_id],
+                ['user_id' => $user_id]
             );
         } else {
             $carrito = Carrito::firstOrCreate(
@@ -80,7 +89,6 @@ class ProductosCarritoController extends Controller
         }
     
         $producto = Producto::find($request->producto_id);
-    
         if (!$producto) {
             return response()->json(['message' => 'Producto no encontrado'], 404);
         }
@@ -95,12 +103,13 @@ class ProductosCarritoController extends Controller
                 'cantidad' => $request->cantidad,
                 'fecha_agrego' => now(),
                 'total' => $producto->precio * $request->cantidad,
-                'estado' => 1 // o el valor correspondiente según tu lógica
+                'estado' => 1 
             ]
         );
     
         return response()->json(['message' => 'Producto agregado al carrito', 'carrito' => $productosCarrito, 'uuid' => $carrito->uuid], 200);
     }
+    
     
     
 

@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+
+
 class Pedido extends Model
 {
     protected $fillable = [
@@ -19,4 +21,11 @@ class Pedido extends Model
     {
         return $this->belongsTo(metodo_pago::class, 'metodo_pago_id');
     }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+
 }

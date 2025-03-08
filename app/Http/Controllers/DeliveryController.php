@@ -45,14 +45,12 @@ class DeliveryController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Obtener el objeto Role con num_rol = X (cambiar X al número correspondiente)
         $role = Role::where('num_rol', 4)->first(); // Reemplazar X por el número correspondiente
 
         if (!$role) {
             return response()->json(['error' => 'El rol no existe.'], 404);
         }
 
-        // Crear usuario con el rol correspondiente
         $user = User::create([
             'name' => $request->nombre,
             'email' => $request->email,
@@ -60,7 +58,6 @@ class DeliveryController extends Controller
             'role_id' => $role->id,
         ]);
 
-        // Crear delivery asociado al usuario
         $delivery = Delivery::create([
             'nombre' => $request->nombre,
             'nombre_empresa' => $request->nombre_empresa,
@@ -106,7 +103,6 @@ class DeliveryController extends Controller
         return response()->json(['message' => 'Delivery eliminado exitosamente.'], 200);
     }
 
-
     public function updatePedidoEstado(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -125,11 +121,18 @@ class DeliveryController extends Controller
             return response()->json(['error' => 'Pedido no encontrado.'], 404);
         }
 
-        // Aquí puedes realizar cualquier otra lógica de validación o procesamiento
-
         $pedido->estado = $request->estado;
         $pedido->save();
 
         return response()->json(['message' => 'Estado del pedido actualizado exitosamente.', 'pedido' => $pedido], 200);
+    }
+
+    public function getPedidosPendientes()
+    {
+        $pedidos = Pedido::where('estado', 3)->with('detalles_pedido.producto')->get();
+    
+        return $pedidos->isEmpty()
+            ? response()->json(['message' => 'No se encontraron pedidos pendientes.'], 404)
+            : response()->json($pedidos, 200);
     }
 }

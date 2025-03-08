@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Personal_Sistema;
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Pedido;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -101,4 +102,16 @@ class PersonalSistemaController extends Controller
 
         return response()->json(['message' => 'Personal de sistemas eliminado exitosamente.'], 200);
     }
+
+    public function pedidosNotificados()
+    {
+        $pedidos = Pedido::where('estado', 'notificado')
+            ->orderBy('created_at', 'asc')
+            ->get();
+    
+        return response()->json($pedidos, 200);
+    }
+    
+    
+    
 }

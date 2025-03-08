@@ -15,4 +15,10 @@ class Proveedor extends Model
     {
         return $this->belongsToMany(Categoria::class, 'categoria_proveedor');
     }
+
+    public function pedidos()
+    {
+        return $this->hasMany(Pedido::class, 'proveedor_id');
+    }
+
 }
