@@ -6,9 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Proveedor extends Model
 {
+    protected $table = 'proveedors'; // Nombre correcto de la tabla
+
     protected $fillable = [
         'nombre', 'nombre_empresa',
-         'dni', 'celular', 'direccion', 'user_id'
+        'dni', 'celular', 'direccion', 'user_id'
     ];
 
     public function categorias()
@@ -18,7 +20,19 @@ class Proveedor extends Model
 
     public function pedidos()
     {
-        return $this->hasMany(Pedido::class, 'proveedor_id');
+        return $this->hasManyThrough(
+            Pedido::class,         // Modelo destino
+            Detalles_Pedido::class, // Modelo intermedio
+            'pedido_id',           // Clave en `detalles_pedidos` que referencia a `pedidos`
+            'id',                  // Clave primaria en `pedidos`
+            'id',                  // Clave en `productos` que referencia a `proveedors`
+            'producto_id'          // Clave en `detalles_pedidos` que referencia a `productos`
+        );
+    }
+
+    public function productos()
+    {
+        return $this->hasMany(Producto::class);
     }
 
 }

@@ -4,7 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController ;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\CategoriaController as Categoria;   
+use App\Http\Controllers\CategoriaController as Categoria;
 use App\Http\Controllers\ProductosCarritoController;
 use App\Http\Controllers\ProveedorController as Proveedor;
 use App\Http\Controllers\ClienteController as Cliente;
@@ -14,8 +14,9 @@ use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\ProductoController as Producto;
 use App\Http\Controllers\PedidoController as Pedido;
 use App\Http\Controllers\EntregaController as Entregar;
-
-
+use App\Http\Controllers\PedidoProgramadoController;
+use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\MercadoPagoController;
 
 
 /*
@@ -32,12 +33,19 @@ use App\Http\Controllers\EntregaController as Entregar;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/productos', [Producto::class, 'index']);
+Route::post('/carrito/vaciar', [ProductosCarritoController::class, 'vaciarPorUserId']);
+Route::post('/v1/cliente', [Cliente::class, 'store']);
 
 //Productos
 Route::get('/categoria-productos', [Categoria::class, 'todasLasCategoriasConProductos']);
 Route::post('/calcular-precio/{id}', [Producto::class, 'calcularPrecio']);
+Route::get('/productos-uno/{id}', [Producto::class, 'mostrar_one']);
 
-//categoria 
+Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirectToGoogle']);
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback']);
+Route::post('/auth/google-login', [GoogleAuthController::class, 'handleGoogleLogin']);
+
+//categoria
 Route::apiResource('/v1/categorias', Categoria::class);
 
 //carrito
@@ -55,14 +63,13 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
     //LOGIN
-    Route::apiResource('/v1/cliente', Cliente::class);
     Route::put('/v1/cliente/{id}', [Cliente::class, 'update']);
     Route::apiResource('/v1/users', UserController::class);
     Route::apiResource('/v1/proveedor', Proveedor::class);
     Route::apiResource('/v1/apoyo', Apoyo::class);
     Route::apiResource('/v1/delivery', Delivery::class);
     Route::post('/logout', [AuthController::class, 'logout']);
-    
+
     //VENTA
 
     //PRODUCTO
@@ -76,6 +83,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/productos-proveedor/{id}', [Producto::class, 'productosPorProveedor']);
     Route::get('/productos-categoria/{id}', [Producto::class, 'productosPorCategoria']);
 
+    //Mercado pago
+    Route::post('/mercadopago/preferencia', [MercadoPagoController::class, 'crearPreferencia']);
 
     Route::put('/categorias/{id}', [Categoria::class, 'update']);
 
@@ -85,6 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
     //CARRITO
     Route::post('/carrito/merge', [ProductosCarritoController::class, 'mergeCart']);
     Route::get('/carrito/user/{userId}', [ProductosCarritoController::class, 'getCartByUserId']);
+
     // Route::get('/carrito', [ProductosCarritoController::class, 'index']); // Mostrar el carrito
     // Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']); // Agregar producto al carrito
     // Route::put('/carrito/{id}', [ProductosCarritoController::class, 'actualizar']); // Actualizar cantidad de un producto en el carrito
@@ -94,20 +104,43 @@ Route::middleware('auth:sanctum')->group(function () {
     //Delivery
     Route::put('/modificar-estado-pedido', [DeliveryController::class, 'updatePedidoEstado']);
     Route::get('/pedidos/pendientes', [DeliveryController::class, 'getPedidosPendientes']);
-    
+    Route::get('/pedidos/pedidos-delivery', [Pedido::class, 'pedidosParaRecoger']);
+    Route::put('/pedidos/aceptar/{pedidoId}', [Pedido::class, 'aceptarPedidoDelivery']);
+    Route::put('/pedidos/en-ruta/{pedidoId}', [Pedido::class, 'actualizarEstadoEnRuta']);
+    Route::put('/pedidos/cancelar/{pedidoId}', [Pedido::class, 'cancelarPedidoDelivery']);
+    Route::get('/pedidos/{pedido_id}/{delivery_id}', [Pedido::class, 'getPedidoById']);
+    Route::get('/delivery/pedido-activo/{deliveryId}', [Pedido::class, 'getPedidoActivo']);
+    Route::post('/entregas', [Entregar::class, 'store']);
+
+
+    //Cliente
+    Route::get('/pedidos/cliente/{id}', [Cliente::class, 'getPedidosByUserId']);
+    Route::get('/v1/cliente', [Cliente::class, 'index']);
+    Route::get('/v1/cliente/{id}', [Cliente::class, 'show']);
+    Route::put('/v1/cliente/{id}', [Cliente::class, 'update']);
+    Route::delete('/v1/cliente/{id}', [Cliente::class, 'destroy']);
+
     //Proveedor
     Route::get('/proveedor/{id}', [Proveedor::class, 'proveedorPorId']);
+    Route::get('/proveedor/pedidos/{id}', [Entregar::class, 'pedidosPorProveedor']);
     Route::put('/pedidos/notificar-recolector/{pedido_id}', [Entregar::class, 'notificarRecolector']);
-    Route::get('/pedidos/proveedor/{id}', [Entregar::class, 'pedidosPorProveedor']);
-    
+    Route::get('/proveedores/categorias/{id}', [Proveedor::class, 'categoriasPorProveedor']);
+
+
     //Personal_sistema(recolector)
-    Route::get('/recolector/pedidos-notificados/{id}', [Apoyo::class, 'pedidosNotificados']);
+    Route::get('/pedidos/notificados', [Apoyo::class, 'pedidosNotificados']);
+    Route::put('/pedidos/marcar-listo/{id}', [Apoyo::class, 'marcarProductoListo']);
+    Route::get('/pedidos/listos', [Apoyo::class, 'pedidosListosParaRecoger']);
+    Route::get('/pedidos/listosParaEnviar', [Pedido::class, 'getPedidosListosParaEnviar']);
+    Route::put('/pedidos/llamardelivery/{id}', [Pedido::class, 'LLamarDelivery']);
+    Route::get('/pedidos-por-confirmar', [Apoyo::class, 'pedidosPorConfirmar']);
+    Route::put('/confirmar-pedido/{id}', [Apoyo::class, 'confirmarPedido']);
 
 
     //pedido
     Route::get('/pedidos/ultimo/{userId}', [Pedido::class, 'getLastPedido']);
     Route::get('/pedidos/{userId}', [Pedido::class, 'getPedidosByUserId']);
-
+    Route::post('/pedido-programado', [PedidoProgramadoController::class, 'store']);
 });
 
 

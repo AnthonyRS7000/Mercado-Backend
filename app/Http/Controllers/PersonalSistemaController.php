@@ -3,9 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Personal_Sistema;
+use App\Models\Delivery;
+use App\Models\Proveedor;
+use App\Models\Cliente;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Pedido;
+use App\Models\detalles_pedido;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -15,9 +19,13 @@ class PersonalSistemaController extends Controller
 {
     public function index()
     {
-        $personalSistemas = Personal_Sistema::all();
+        $personalSistemas = Personal_Sistema::select('personal_sistemas.*', 'users.email')
+            ->join('users', 'personal_sistemas.user_id', '=', 'users.id')
+            ->get();
+
         return response()->json($personalSistemas, 200);
     }
+
 
     public function show($id)
     {
@@ -27,7 +35,7 @@ class PersonalSistemaController extends Controller
             return response()->json(['error' => 'Personal de sistemas no encontrado.'], 404);
         }
 
-        return response()->json($personalSistema, 200);
+        return response()->json(['user' => $user, 'Apoyo' => $personalSistema], 201);
     }
 
     public function store(Request $request)
@@ -105,13 +113,206 @@ class PersonalSistemaController extends Controller
 
     public function pedidosNotificados()
     {
-        $pedidos = Pedido::where('estado', 'notificado')
-            ->orderBy('created_at', 'asc')
-            ->get();
-    
-        return response()->json($pedidos, 200);
+        // Obtenemos los pedidos con detalles y el estado de notificación
+        $pedidos = Detalles_Pedido::with([
+                'pedido.user:id,name',
+                'pedido.cliente:id,user_id,nombre,celular',
+                'producto.proveedor:id,nombre,nombre_empresa', // Relación corregida
+            ])
+            ->select('id', 'pedido_id', 'producto_id', 'cantidad', 'subtotal', 'notificado_proveedor', 'created_at')
+            ->where('notificado_proveedor', '!=', 2) // Excluimos los productos con notificado_proveedor == 2
+            ->get()
+            ->groupBy('pedido_id'); // Agrupamos por pedido
+
+        // Filtrar solo aquellos pedidos que tengan productos que no estén marcados como 'notificado_proveedor == 2'
+        $pedidosFiltrados = $pedidos->filter(function($detallePedidos) {
+            // Verifica si hay al menos un producto con notificado_proveedor == 0 o 1
+            return $detallePedidos->contains(function($detalle) {
+                return $detalle->notificado_proveedor == 0 || $detalle->notificado_proveedor == 1;
+            });
+        });
+
+        // Retornamos los pedidos y sus productos filtrados
+        return response()->json($pedidosFiltrados, 200);
     }
-    
-    
-    
+
+
+    public function marcarProductoListo(Request $request, $pedido_id)
+    {
+        $request->validate([
+            'producto_id' => 'required|exists:productos,id',
+            'recolector_id' => 'required|exists:personal_sistemas,id'
+        ]);
+
+        // Obtener el detalle del pedido que se está actualizando
+        $detalle = Detalles_Pedido::where('pedido_id', $pedido_id)
+            ->where('producto_id', $request->producto_id)
+            ->first();
+
+        if (!$detalle) {
+            return response()->json(['message' => 'Detalle de pedido no encontrado'], 404);
+        }
+
+        // Actualizar el estado del producto
+        $detalle->update([
+            'notificado_proveedor' => 2,
+            'personal_sistema_id' => $request->recolector_id
+        ]);
+
+        // Verificar si todos los productos del pedido tienen 'notificado_proveedor' == 2
+        $todosListos = Detalles_Pedido::where('pedido_id', $pedido_id)
+            ->where('notificado_proveedor', '!=', 2) // Buscar productos que no estén en estado 2
+            ->count() === 0; // Si no hay productos con estado distinto de 2, todos están listos
+
+        if ($todosListos) {
+            // Si todos los productos están listos, actualizar el estado del pedido a 3
+            $pedido = Pedido::find($pedido_id);
+            if ($pedido) {
+                $pedido->update(['estado' => 3]); // Actualiza el estado del pedido
+            }
+        }
+
+        return response()->json([
+            'message' => 'Estado del producto actualizado a 2',
+            'detalle' => $detalle
+        ]);
+    }
+
+
+
+    public function pedidosListosParaRecoger()
+    {
+        // Obtener pedidos agrupados por pedido_id
+        $pedidos = Detalles_Pedido::with([
+                'pedido.user:id,name',
+                'pedido.cliente:id,user_id,nombre,celular',
+                'producto.proveedor:id,nombre,nombre_empresa'
+            ])
+            ->select('id', 'pedido_id', 'producto_id', 'cantidad', 'precio_unitario', 'notificado_proveedor', 'created_at')
+            ->get()
+            ->groupBy('pedido_id') // Agrupar por pedido
+            ->filter(function ($productos) {
+                // Filtrar solo los pedidos donde TODOS los productos tienen notificado_proveedor = 2
+                return $productos->every(fn($producto) => $producto->notificado_proveedor == 2);
+            });
+
+        // Si no hay pedidos listos, retornar un mensaje vacío
+        if ($pedidos->isEmpty()) {
+            return response()->json(['message' => 'No hay pedidos listos para recoger'], 200);
+        }
+
+        return response()->json($pedidos);
+    }
+
+    public function pedidosPorConfirmar()
+    {
+        // Realizamos la consulta buscando pedidos con estado 20
+        $pedidos = Pedido::with([
+            'user:id,name', // Relación con la tabla de usuarios (clientes)
+            'detalles_Pedido.producto.proveedor:id,nombre,nombre_empresa', // Relación con productos y proveedores
+            'detalles_Pedido.producto.categoria:id,nombre', // Si necesitas la categoría del producto
+        ])
+        ->where('estado', 20)
+        ->get();
+
+        // Iteramos sobre los pedidos para asignar el comprador
+        foreach ($pedidos as $pedido) {
+            // Verificar en la tabla de personal_sistemas
+            $personal = Personal_Sistema::where('user_id', $pedido->user_id)->first();
+            if ($personal) {
+                $pedido->comprador = [
+                    'nombre' => $personal->nombre,
+                    'user_id' => $personal->user_id,
+                    'celular' => $personal->celular,
+                ];
+            } else {
+                // Verificar en la tabla de deliveries
+                $delivery = Delivery::where('user_id', $pedido->user_id)->first();
+                if ($delivery) {
+                    $pedido->comprador = [
+                        'nombre' => $delivery->nombre,
+                        'user_id' => $delivery->user_id,
+                        'celular' => $delivery->celular,
+                    ];
+                } else {
+                    // Verificar en la tabla de clientes
+                    $cliente = Cliente::where('user_id', $pedido->user_id)->first();
+                    if ($cliente) {
+                        $pedido->comprador = [
+                            'nombre' => $cliente->nombre,
+                            'user_id' => $cliente->user_id,
+                            'celular' => $cliente->celular,
+                        ];
+                    } else {
+                        // Verificar en la tabla de proveedores
+                        $proveedor = Proveedor::where('user_id', $pedido->user_id)->first();
+                        if ($proveedor) {
+                            $pedido->comprador = [
+                                'nombre' => $proveedor->nombre,
+                                'user_id' => $proveedor->user_id,
+                                'celular' => $proveedor->celular,
+                            ];
+                        } else {
+                            // Si no se encuentra ningún comprador, asignar null
+                            $pedido->comprador = null;
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($pedidos->isEmpty()) {
+            return response()->json(['message' => 'No hay pedidos pendientes por confirmar'], 200);
+        }
+
+        // Estructuramos el JSON de respuesta
+        $response = $pedidos->map(function ($pedido) {
+            return [
+                'id' => $pedido->id,
+                'fecha' => $pedido->fecha,
+                'estado' => $pedido->estado,
+                'direccion_entrega' => $pedido->direccion_entrega,
+                'total' => $pedido->total,
+                'user' => $pedido->user,
+                'comprador' => $pedido->comprador,
+                'detalles_pedido' => $pedido->detalles_pedido->map(function ($detalle) {
+                    return [
+                        'id' => $detalle->id,
+                        'cantidad' => $detalle->cantidad,
+                        'precio_unitario' => $detalle->precio_unitario,
+                        'producto_id' => $detalle->producto_id,
+                        'nombre_producto' => $detalle->producto->nombre ?? null,
+                        'proveedor' => [
+                            'id' => $detalle->producto->proveedor->id ?? null,
+                            'nombre' => $detalle->producto->proveedor->nombre ?? null,
+                            'nombre_empresa' => $detalle->producto->proveedor->nombre_empresa ?? null,
+                        ],
+                        'categoria' => [
+                            'id' => $detalle->producto->categoria->id ?? null,
+                            'nombre' => $detalle->producto->categoria->nombre ?? null,
+                        ],
+                    ];
+                })
+            ];
+        });
+        return response()->json($response, 200);
+    }
+
+    public function confirmarPedido($id)
+    {
+        $pedido = Pedido::find($id);
+
+        if (!$pedido) {
+            return response()->json(['message' => 'Pedido no encontrado'], 404);
+        }
+
+        if ($pedido->estado !== 20) {
+            return response()->json(['message' => 'El pedido no está en estado 20'], 400);
+        }
+
+        $pedido->estado = 4; // Nuevo estado
+        $pedido->save();
+
+        return response()->json(['message' => 'Pedido confirmado con éxito'], 200);
+    }
 }

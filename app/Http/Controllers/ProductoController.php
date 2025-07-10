@@ -134,4 +134,34 @@ class ProductoController extends Controller
         ], 200);
     }
 
+  public function mostrar_one($id)
+{
+    // Buscar el producto con su categoría y proveedor
+    $producto = Producto::with(['categoria', 'proveedor'])->find($id);
+
+    // Si no se encuentra el producto, devolver un mensaje de error
+    if (!$producto) {
+        return response()->json([
+            'message' => 'Producto no encontrado.'
+        ], 404);
+    }
+
+    // Buscar productos relacionados en la misma categoría y con nombre similar
+    $relacionados = Producto::with(['categoria', 'proveedor'])
+        ->where('categoria_id', $producto->categoria_id)
+        ->where('id', '!=', $producto->id)
+        ->where(function ($query) use ($producto) {
+            $query->where('nombre', 'LIKE', '%' . $producto->nombre . '%')
+                  ->orWhere('nombre', 'LIKE', '%' . substr($producto->nombre, 0, 3) . '%');
+        })
+        ->take(4)
+        ->get();
+
+    // Respuesta con el producto actual y productos relacionados
+    return response()->json([
+        'producto' => $producto,
+        'relacionados' => $relacionados
+    ]);
+}
+
 }

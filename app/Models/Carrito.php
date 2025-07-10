@@ -11,7 +11,7 @@ class Carrito extends Model
     use HasFactory;
 
     protected $fillable = [
-        'cliente_id', 'uuid'
+        'user_id', 'uuid'
     ];
 
     public function productosCarrito()

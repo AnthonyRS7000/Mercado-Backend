@@ -4,36 +4,85 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Pedido;
+use App\Models\Entrega;
 use App\Models\detalles_pedido;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
+
 
 class EntregaController extends Controller
 {
-    public function notificarRecolector(Request $request, $pedido_id)
+    public function store(Request $request)
     {
-        $pedido = Pedido::find($pedido_id);
+        Log::info('Iniciando la creación de entrega', ['request_data' => $request->all()]);
 
-        if (!$pedido) {
-            return response()->json(['error' => 'Pedido no encontrado'], 404);
+        $validator = Validator::make($request->all(), [
+            'fecha_entrega' => 'required|date',
+            'imagen_entregas' => 'required|file|max:2048',
+            'comentario' => 'required|string',
+            'estado' => 'required|integer|in:0,1,2,3',
+            'precio' => 'required|numeric',
+            'pedido_id' => 'required|exists:pedidos,id',
+            'delivery_id' => 'required|exists:deliveries,id'
+        ]);
+
+        if ($validator->fails()) {
+            Log::error('Error de validación al crear entrega', ['errors' => $validator->errors()]);
+            return response()->json([
+                'message' => 'Error de validación',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        // Actualizar solo los productos listos del proveedor
-        detalles_pedido::where('pedido_id', $pedido_id)
-            ->whereHas('producto', function ($query) use ($request) {
-                $query->where('proveedor_id', $request->proveedor_id);
-            })
-            ->update(['notificado_proveedor' => 1]);
+        if ($request->hasFile('imagen_entregas')) {
+            Log::info('Imagen detectada');
+            $file = $request->file('imagen_entregas');
+            $mimeType = $file->getClientMimeType();
+            Log::info('Tipo MIME de la imagen de entrega:', [$mimeType]);
 
-        // Mensaje para la plataforma y WhatsApp
-        $mensaje = "📦 Pedido #$pedido->id tiene productos listos para recoger.";
+            $validMimeTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+            if (!in_array($mimeType, $validMimeTypes)) {
+                Log::error('Tipo de archivo no permitido:', [$mimeType]);
+                return response()->json(['error' => 'El tipo de archivo no es permitido'], 422);
+            }
 
-        $numeroRecolector = "51921013989"; // Reemplazar con número real
-        $linkWhatsapp = "https://wa.me/$numeroRecolector?text=" . urlencode($mensaje);
+            $imagePath = $file->store('entregas', 'public');
+            $imageUrl = Storage::url($imagePath);
+        } else {
+            Log::error('No se detectó una imagen en la solicitud');
+            return response()->json(['error' => 'El campo imagen_entregas es obligatorio'], 400);
+        }
 
-        return response()->json([
-            'message' => 'Productos listos para el recolector',
-            'mensaje_plataforma' => $mensaje,
-            'link_whatsapp' => $linkWhatsapp
-        ]);
+        try {
+            $entrega = Entrega::create([
+                'fecha_entrega' => $request->fecha_entrega,
+                'imagen_entregas' => $imageUrl ?? null,
+                'comentario' => $request->comentario,
+                'estado' => (int) $request->estado,
+                'precio' => $request->precio,
+                'pedido_id' => $request->pedido_id,
+                'delivery_id' => $request->delivery_id
+            ]);
+
+            // ✅ Cambiar estado del pedido a 5 (entregado)
+            $pedido = Pedido::find($request->pedido_id);
+            if ($pedido) {
+                $pedido->estado = 5;
+                $pedido->save();
+                Log::info('Estado del pedido actualizado a 5', ['pedido_id' => $pedido->id]);
+            }
+
+            return response()->json([
+                'message' => 'Entrega creada con éxito y estado del pedido actualizado',
+                'data' => $entrega
+            ], 201);
+
+        } catch (\Exception $e) {
+            Log::error('Error al crear la entrega', ['exception' => $e->getMessage()]);
+            return response()->json(['error' => 'Error al crear la entrega'], 500);
+        }
     }
 
     public function pedidosPorProveedor($id)
@@ -49,13 +98,51 @@ class EntregaController extends Controller
                         $subQuery->where('proveedor_id', $id);
                     })->where('notificado_proveedor', 0); // Excluir productos ya notificados
                 },
-                'detalles_pedido.producto',
+                'detalles_pedido.producto:id,nombre,precio,stock,tipo', // Asegúrate de que el producto se incluya correctamente
                 'user:id,name'
             ])
             ->orderBy('created_at', 'asc')
             ->get();
-    
+
         return response()->json($pedidos);
     }
-    
+
+
+    public function notificarRecolector(Request $request, $pedido_id)
+    {
+        $pedido = Pedido::find($pedido_id);
+
+        if (!$pedido) {
+            return response()->json(['error' => 'Pedido no encontrado'], 404);
+        }
+
+        // Actualizar solo el producto específico a notificado_proveedor = 2
+        $detalle = Detalles_Pedido::where('pedido_id', $pedido_id)
+            ->where('producto_id', $request->producto_id)
+            ->first();
+
+        if (!$detalle) {
+            return response()->json(['message' => 'Detalle de pedido no encontrado'], 404);
+        }
+
+        // Cambiar el estado del producto seleccionado a 2
+        $detalle->update([
+            'notificado_proveedor' => 1
+        ]);
+
+        // Cambiar el estado del pedido a 2 sin importar los otros productos
+        $pedido->update(['estado' => 2]);
+
+        // Mensaje para la plataforma y WhatsApp
+        $mensaje = "📦 Pedido #$pedido->id tiene productos listos para recoger.";
+
+        $numeroRecolector = "51921013989"; // Reemplazar con número real
+        $linkWhatsapp = "https://wa.me/$numeroRecolector?text=" . urlencode($mensaje);
+
+        return response()->json([
+            'message' => 'Producto notificado como listo para el recolector',
+            'mensaje_plataforma' => $mensaje,
+            'link_whatsapp' => $linkWhatsapp
+        ]);
+    }
 }

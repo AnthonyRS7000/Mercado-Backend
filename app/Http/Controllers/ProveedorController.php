@@ -15,9 +15,14 @@ class ProveedorController extends Controller
 {
     public function index()
     {
-        $Proveedors = Proveedor::with('categorias')->get();
+        $Proveedors = Proveedor::select('proveedors.*', 'users.email')  // Selecciona los campos de Proveedor y el email del usuario
+            ->join('users', 'proveedors.user_id', '=', 'users.id')  // Realiza un JOIN entre proveedors y users
+            ->with('categorias')  // Incluye las categorías del proveedor
+            ->get();
+
         return response()->json($Proveedors, 200);
     }
+
 
     public function show($id)
     {
@@ -27,7 +32,7 @@ class ProveedorController extends Controller
             return response()->json(['error' => 'Proveedor no encontrado.'], 404);
         }
 
-        return response()->json($Proveedor, 200);
+        return response()->json(['user' => $user, 'Proveedor' => $Proveedor], 201);
     }
 
     public function store(Request $request)
@@ -119,7 +124,7 @@ class ProveedorController extends Controller
 
         return response()->json(['message' => 'Proveedor eliminado exitosamente.'], 200);
     }
-    
+
     public function proveedorPorId($id)
     {
         $proveedor = Proveedor::with('categorias')->find($id);
@@ -147,7 +152,20 @@ class ProveedorController extends Controller
             ])
             ->orderBy('created_at', 'asc')
             ->get();
-    
+
         return response()->json($pedidos);
     }
+    public function categoriasPorProveedor($id)
+    {
+        $proveedor = Proveedor::find($id);
+
+        if (!$proveedor) {
+            return response()->json(['error' => 'Proveedor no encontrado.'], 404);
+        }
+
+        $categorias = $proveedor->categorias; // relación many-to-many
+
+        return response()->json($categorias, 200);
+    }
+
 }

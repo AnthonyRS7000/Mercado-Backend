@@ -13,13 +13,14 @@ return new class extends Migration
     {
         Schema::create('clientes', function (Blueprint $table) {
             $table->id();
-            $table->string('nombre'); 
-            $table->string('dni')->unique(); 
-            $table->string('celular')->unique(); 
-            $table->string('direccion'); 
-            $table->string('preferencias_compra'); 
+            $table->string('nombre')->nullable(); // También puede ser null si no viene
+            $table->string('dni')->unique()->nullable();
+            $table->string('celular')->unique()->nullable();
+            $table->string('direccion')->nullable();
+            $table->string('preferencias_compra')->nullable();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->timestamps();
+
         });
     }
 

@@ -18,5 +18,10 @@ class Personal_sistema extends Model
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
+
+    public function personalSistema()
+    {
+        return $this->belongsTo(Personal_Sistema::class, 'personal_sistema_id');
+    }
     
 }

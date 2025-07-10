@@ -19,6 +19,10 @@ return new class extends Migration
             $table->decimal('total', 10, 2)->default(0);
             $table->foreignId('cliente_id')->constrained()->onDelete('cascade');
             $table->foreignId('metodo_pago_id')->constrained()->onDelete('cascade');
+            $table->foreignId('delivery_id')->nullable()->constrained('deliveries');
+            $table->foreignId('personal_sistema_id')->nullable()->constrained('personal_sistema');
+            $table->date('fecha_entrega')->nullable();
+            $table->time('hora_entrega')->nullable();
             $table->timestamps();
         });
     }

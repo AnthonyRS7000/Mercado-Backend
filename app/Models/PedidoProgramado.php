@@ -5,26 +5,26 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Cliente extends Model
+class PedidoProgramado extends Model
 {
     use HasFactory;
-    protected $fillable = [
-        'nombre',
-        'dni',
-        'celular',
-        'direccion',
-        'preferencias_compra',
-        'user_id',
-    ];
 
-    public function carritos()
-    {
-        return $this->hasMany(Carrito::class, 'cliente_id');
-    }
+    protected $fillable = [
+        'user_id',
+        'metodo_pago_id',
+        'direccion_entrega',
+        'fecha_programada',
+        'hora_programada',
+        'estado'
+    ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    public function metodoPago()
+    {
+        return $this->belongsTo(MetodoPago::class);
+    }
 }

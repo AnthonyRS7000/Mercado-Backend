@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Cliente;
 use App\Models\User;
+use App\Models\Pedido;
 use App\Models\Role;
+use App\Models\Carrito;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -39,26 +41,24 @@ class ClienteController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
         ]);
-    
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-    
-        // Obtener el objeto Role con num_rol = 1
+
         $role = Role::where('num_rol', 1)->first();
-    
         if (!$role) {
             return response()->json(['error' => 'El rol no existe.'], 404);
         }
-    
-        // Crear usuario con num_rol = 1 por defecto
+
+        // Crear usuario
         $user = User::create([
             'name' => $request->nombre,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role_id' => $role->id, // Asignar el id del rol correspondiente al valor de num_rol
+            'role_id' => $role->id,
         ]);
-    
+
         // Crear cliente asociado
         $cliente = Cliente::create([
             'nombre' => $request->nombre,
@@ -68,11 +68,19 @@ class ClienteController extends Controller
             'preferencias_compra' => $request->preferencias_compra,
             'user_id' => $user->id,
         ]);
-    
-        return response()->json(['user' => $user, 'cliente' => $cliente], 201);
+
+        // Crear carrito vacío usando el user_id
+        $carrito = Carrito::create([
+            'user_id' => $user->id,
+        ]);
+
+        return response()->json([
+            'user' => $user,
+            'cliente' => $cliente,
+            'carrito' => $carrito
+        ], 201);
     }
-    
-    
+
     public function update(Request $request, $id)
     {
         $cliente = Cliente::find($id);
@@ -106,5 +114,16 @@ class ClienteController extends Controller
         $cliente->delete();
 
         return response()->json(['message' => 'Cliente eliminado exitosamente.'], 200);
+    }
+
+    public function getPedidosByUserId($user_id)
+    {
+        $pedidos = Pedido::where('user_id', $user_id)->get();
+
+        if ($pedidos->isEmpty()) {
+            return response()->json(['message' => 'No se encontraron pedidos para este usuario.'], 404);
+        }
+
+        return response()->json($pedidos, 200);
     }
 }
