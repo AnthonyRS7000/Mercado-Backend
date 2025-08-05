@@ -31,6 +31,19 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+// config/services.php
+
+    'mercadopago' => [
+        // Producción
+        'client_id'     => env('MP_CLIENT_ID'),
+        'client_secret' => env('MP_CLIENT_SECRET'),
+        'access_token'  => env('MP_ACCESS_TOKEN'),
+        // Sandbox
+        'client_id_test'     => env('MP_CLIENT_ID_TEST'),
+        'client_secret_test' => env('MP_CLIENT_SECRET_TEST'),
+        'access_token_test'  => env('MP_ACCESS_TOKEN_TEST'),
+    ],
+
 
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),

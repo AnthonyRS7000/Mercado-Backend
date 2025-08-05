@@ -57,6 +57,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost'),
+
     'asset_url' => env('ASSET_URL'),
 
     /*
@@ -154,6 +156,7 @@ return [
     | this array to grant expanded functionality to your applications.
     |
     */
+
 
     'providers' => ServiceProvider::defaultProviders()->merge([
         /*

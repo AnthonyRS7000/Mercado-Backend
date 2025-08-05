@@ -35,7 +35,7 @@ class ProductoController extends Controller
             'nombre' => 'required|string|max:255',
             'descripcion' => 'required|string|max:255',
             'estado' => 'required|integer',
-            'stock' => 'required|integer',
+            'stock' => 'nullable|integer',
             'precio' => 'required|numeric',
             'categoria_id' => 'required|exists:categorias,id',
             'proveedor_id' => 'required|exists:proveedors,id',
@@ -70,7 +70,7 @@ class ProductoController extends Controller
             'nombre' => $request->nombre,
             'descripcion' => $request->descripcion,
             'estado' => $request->estado,
-            'stock' => $request->stock,
+            'stock' => $request->input('stock', 0),
             'precio' => $request->precio,
             'categoria_id' => $request->categoria_id,
             'proveedor_id' => $request->proveedor_id,
@@ -81,16 +81,87 @@ class ProductoController extends Controller
         return response()->json($producto, 201);
     }
 
+    public function destroy($id)
+    {
+        $producto = Producto::find($id);
+
+        if (!$producto) {
+            return response()->json(['error' => 'Producto no encontrado.'], 404);
+        }
+
+        try {
+            // Opcional: eliminar imagen del storage si existe
+            if ($producto->imagen && Storage::disk('public')->exists(str_replace('/storage/', '', $producto->imagen))) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $producto->imagen));
+            }
+
+            $producto->delete();
+            return response()->json(['message' => 'Producto eliminado exitosamente.'], 200);
+        } catch (\Exception $e) {
+            \Log::error('Error al eliminar producto: ' . $e->getMessage());
+            return response()->json(['error' => 'Ocurrió un error al eliminar el producto.'], 500);
+        }
+    }
+
+    public function update(Request $request, $id)
+    {
+        $producto = Producto::find($id);
+
+        if (!$producto) {
+            return response()->json(['error' => 'Producto no encontrado.'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'nombre' => 'sometimes|required|string|max:255',
+            'descripcion' => 'sometimes|required|string|max:255',
+            'estado' => 'sometimes|required|integer',
+            'stock' => 'sometimes|required|integer',
+            'precio' => 'sometimes|required|numeric',
+            'categoria_id' => 'sometimes|required|exists:categorias,id',
+            'proveedor_id' => 'sometimes|required|exists:proveedors,id',
+            'imagen' => 'nullable|file|max:2048',
+            'tipo' => 'sometimes|required|in:peso,unidad',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Actualiza la imagen solo si se envió una nueva
+        if ($request->hasFile('imagen')) {
+            $file = $request->file('imagen');
+            $mimeType = $file->getClientMimeType();
+            $validMimeTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/svg+xml'];
+            if (!in_array($mimeType, $validMimeTypes)) {
+                return response()->json(['errors' => ['imagen' => 'El tipo de archivo no es permitido']], 422);
+            }
+            // Borra la imagen vieja si existe
+            if ($producto->imagen && Storage::disk('public')->exists(str_replace('/storage/', '', $producto->imagen))) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $producto->imagen));
+            }
+            $imagenPath = $file->store('imagenes', 'public');
+            $producto->imagen = Storage::url($imagenPath);
+        }
+
+        // Actualiza los campos (solo si vienen en la request)
+        foreach (['nombre', 'descripcion', 'estado', 'stock', 'precio', 'categoria_id', 'proveedor_id', 'tipo'] as $campo) {
+            if ($request->has($campo)) {
+                $producto->{$campo} = $request->{$campo};
+            }
+        }
+
+        $producto->save();
+
+        return response()->json($producto, 200);
+    }
+
     public function productosPorProveedor($proveedor_id)
     {
         $productos = Producto::with('categoria')->where('proveedor_id', $proveedor_id)->get();
 
-        if ($productos->isEmpty()) {
-            return response()->json(['error' => 'No se encontraron productos para este proveedor.'], 404);
-        }
-
         return response()->json($productos, 200);
     }
+
 
     public function productosPorCategoria($categoria_id)
     {

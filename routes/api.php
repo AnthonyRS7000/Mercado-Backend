@@ -17,6 +17,7 @@ use App\Http\Controllers\EntregaController as Entregar;
 use App\Http\Controllers\PedidoProgramadoController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MercadoPagoController;
+use App\Http\Controllers\SolicitudRegistroController;
 
 
 /*
@@ -35,6 +36,8 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/productos', [Producto::class, 'index']);
 Route::post('/carrito/vaciar', [ProductosCarritoController::class, 'vaciarPorUserId']);
 Route::post('/v1/cliente', [Cliente::class, 'store']);
+Route::post('/solicitudes', [SolicitudRegistroController::class, 'store']);
+Route::post('/mp/webhook', [MercadoPagoController::class, 'webhook']);
 
 //Productos
 Route::get('/categoria-productos', [Categoria::class, 'todasLasCategoriasConProductos']);
@@ -70,6 +73,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('/v1/delivery', Delivery::class);
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    //ADMIN
+        Route::get('/solicitudes', [SolicitudRegistroController::class, 'index']); // Ver solicitudes
+    Route::put('/solicitudes/aprobar/{id}', [SolicitudRegistroController::class, 'aprobar']); // Aprobar
+    Route::put('/solicitudes/rechazar/{id}', [SolicitudRegistroController::class, 'rechazar']);
+
     //VENTA
 
     //PRODUCTO
@@ -85,6 +93,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //Mercado pago
     Route::post('/mercadopago/preferencia', [MercadoPagoController::class, 'crearPreferencia']);
+
 
     Route::put('/categorias/{id}', [Categoria::class, 'update']);
 

@@ -180,29 +180,45 @@ class PersonalSistemaController extends Controller
 
 
 
-    public function pedidosListosParaRecoger()
-    {
-        // Obtener pedidos agrupados por pedido_id
-        $pedidos = Detalles_Pedido::with([
-                'pedido.user:id,name',
-                'pedido.cliente:id,user_id,nombre,celular',
-                'producto.proveedor:id,nombre,nombre_empresa'
-            ])
-            ->select('id', 'pedido_id', 'producto_id', 'cantidad', 'precio_unitario', 'notificado_proveedor', 'created_at')
-            ->get()
-            ->groupBy('pedido_id') // Agrupar por pedido
-            ->filter(function ($productos) {
-                // Filtrar solo los pedidos donde TODOS los productos tienen notificado_proveedor = 2
-                return $productos->every(fn($producto) => $producto->notificado_proveedor == 2);
-            });
+public function pedidosListosParaRecoger()
+{
+    // 1) Traer todos los detalles de pedido cuyos pedidos estén en estado 3
+    $detalles = Detalles_Pedido::with([
+            'pedido.user:id,name',
+            'pedido.cliente:id,user_id,nombre,celular',
+            'producto.proveedor:id,nombre,nombre_empresa'
+        ])
+        // Validación: solo detalles de pedidos con estado = 3
+        ->whereHas('pedido', function($q) {
+            $q->where('estado', 3);
+        })
+        ->select(
+            'id',
+            'pedido_id',
+            'producto_id',
+            'cantidad',
+            'precio_unitario',
+            'notificado_proveedor',
+            'created_at'
+        )
+        ->get();
 
-        // Si no hay pedidos listos, retornar un mensaje vacío
-        if ($pedidos->isEmpty()) {
-            return response()->json(['message' => 'No hay pedidos listos para recoger'], 200);
-        }
+    // 2) Agrupar por pedido_id
+    $agrupados = $detalles->groupBy('pedido_id');
 
-        return response()->json($pedidos);
+    // 3) Filtrar sólo los grupos donde TODOS los productos tienen notificado_proveedor == 2
+    $listos = $agrupados->filter(function ($productos) {
+        return $productos->every(fn($p) => $p->notificado_proveedor == 2);
+    });
+
+    // 4) Si no hay ninguno, retornamos mensaje
+    if ($listos->isEmpty()) {
+        return response()->json(['message' => 'No hay pedidos listos para recoger'], 200);
     }
+
+    // 5) Devolvemos el objeto agrupado
+    return response()->json($listos, 200);
+}
 
     public function pedidosPorConfirmar()
     {

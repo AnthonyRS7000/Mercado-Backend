@@ -7,7 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 class metodo_pago extends Model
 {
     protected $fillable = [
-        'nombre', 'descripcion', 'estado'
+        'nombre',
+        'descripcion',
+        'estado',
+        'mp_preference_id',  // ←
+        'mp_payment_id',     // ←
+        'mp_status',         // ←
     ];
 
     public function pedidos()
