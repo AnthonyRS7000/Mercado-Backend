@@ -31,7 +31,7 @@ use App\Http\Controllers\SolicitudRegistroController;
 |
 */
 
-Route::post('/register', [AuthController::class, 'register']);
+// Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/productos', [Producto::class, 'index']);
 Route::post('/carrito/vaciar', [ProductosCarritoController::class, 'vaciarPorUserId']);
