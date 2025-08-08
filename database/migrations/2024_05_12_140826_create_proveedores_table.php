@@ -16,9 +16,8 @@ return new class extends Migration
             $table->string('nombre');
             $table->string('nombre_empresa');
             $table->string('direccion');
-            $table->string('dni')->unique(); 
-            $table->string('celular')->unique(); 
-            $table->string('catalogo_productos');
+            $table->string('dni')->unique();
+            $table->string('celular')->unique();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->timestamps();
         });
