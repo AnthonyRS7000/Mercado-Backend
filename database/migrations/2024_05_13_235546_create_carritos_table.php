@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('carritos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('cliente_id')->nullable()->constrained('clientes')->onDelete('set null');
-            $table->uuid('uuid')->unique();
+            $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->uuid('uuid')->nullable()->unique()->change();
             $table->timestamps();
         });
     }
