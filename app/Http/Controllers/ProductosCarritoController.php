@@ -12,6 +12,8 @@ use App\Models\Cliente;
 use App\Models\Proveedor;
 use App\Models\Personal_sistema;
 use App\Models\Delivery;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 
 class ProductosCarritoController extends Controller

@@ -43,6 +43,7 @@ Route::post('/mp/webhook', [MercadoPagoController::class, 'webhook']);
 Route::get('/categoria-productos', [Categoria::class, 'todasLasCategoriasConProductos']);
 Route::post('/calcular-precio/{id}', [Producto::class, 'calcularPrecio']);
 Route::get('/productos-uno/{id}', [Producto::class, 'mostrar_one']);
+Route::get('/productos-proveedor/{id}', [Producto::class, 'productosPorProveedor']);
 
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback']);
@@ -88,7 +89,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/productos/{id}', [Producto::class, 'destroy']);
     Route::post('/compra-peso/{id}', [Producto::class, 'compra_peso']);
     Route::post('/compra-unidad/{id}', [Producto::class, 'compra_unidad']);
-    Route::get('/productos-proveedor/{id}', [Producto::class, 'productosPorProveedor']);
     Route::get('/productos-categoria/{id}', [Producto::class, 'productosPorCategoria']);
 
     //Mercado pago

@@ -13,13 +13,26 @@ return new class extends Migration
     {
         Schema::create('productos_carritos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('carrito_id')->constrained('carritos')->onDelete('cascade');
-            $table->foreignId('producto_id')->constrained('productos')->onDelete('cascade');
+
+            $table->foreignId('carrito_id')
+                ->constrained('carritos')
+                ->onDelete('cascade');
+
+            $table->foreignId('producto_id')
+                ->constrained('productos')
+                ->onDelete('cascade');
+
             $table->decimal('cantidad', 10, 3);
-            $table->timestamp('fecha_agrego');
+            $table->timestamp('fecha_agrego')->useCurrent();
             $table->decimal('total', 10, 2);
-            $table->integer('estado')->default(1)->change();
+
+            // <- AQUÍ el cambio: crear la columna directamente, sin change()
+            $table->tinyInteger('estado')->default(1);
+
             $table->timestamps();
+
+            // Evita duplicados del mismo producto en el mismo carrito
+            $table->unique(['carrito_id', 'producto_id']);
         });
     }
 

@@ -8,6 +8,8 @@ use App\Models\Role;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use App\Models\SolicitudRegistro;
+
 
 class AuthController extends Controller
 {
@@ -67,15 +69,53 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        $email = $request->input('email');
         $credentials = $request->only('email', 'password');
 
+        // Revisa la última solicitud que exista para ese email
+        $solicitud = SolicitudRegistro::where('email', $email)
+            ->orderByDesc('created_at')
+            ->first();
+
+        // Si NO existe usuario en users, pero SÍ hay solicitud rechazada/pendiente -> bloquear antes de intentar
+        $userByEmail = \App\Models\User::where('email', $email)->first();
+        if (!$userByEmail && $solicitud) {
+            if ($solicitud->estado === 'rechazada') {
+                return response()->json(['error' => 'Su solicitud fue RECHAZADA. Por favor comuníquese con el administrador.'], 403);
+            }
+            if ($solicitud->estado === 'pendiente') {
+                return response()->json(['error' => 'Su solicitud está PENDIENTE de aprobación. Intente más tarde.'], 403);
+            }
+        }
+
+        // Intento de login normal
         if (!Auth::attempt($credentials)) {
+            // Si falla el login, pero detectamos solicitud rechazada/pendiente, mostramos mensaje específico
+            if ($solicitud) {
+                if ($solicitud->estado === 'rechazada') {
+                    return response()->json(['error' => 'Su solicitud fue RECHAZADA. Por favor comuníquese con el administrador.'], 403);
+                }
+                if ($solicitud->estado === 'pendiente') {
+                    return response()->json(['error' => 'Su solicitud está PENDIENTE de aprobación. Intente más tarde.'], 403);
+                }
+            }
             return response()->json(['error' => 'Credenciales inválidas.'], 401);
         }
 
         $user = Auth::user();
 
+        // Seguridad extra: si por algún desajuste existe usuario pero su solicitud no está aprobada, bloquear
+        if ($solicitud && in_array($solicitud->estado, ['pendiente', 'rechazada'])) {
+            Auth::logout();
+            return response()->json([
+                'error' => $solicitud->estado === 'rechazada'
+                    ? 'Su solicitud fue RECHAZADA. Por favor comuníquese con el administrador.'
+                    : 'Su solicitud está PENDIENTE de aprobación. Intente más tarde.'
+            ], 403);
+        }
+
         if (!$user->role) {
+            Auth::logout();
             return response()->json(['error' => 'El usuario no tiene un rol asignado.'], 401);
         }
 
@@ -98,17 +138,16 @@ class AuthController extends Controller
             $relatedData = $user->personalSistema;
         }
 
-        // Actualizar carrito para el cliente
+        // Actualizar carrito (si vino uuid)
         $uuid = $request->input('carrito_uuid');
         if ($uuid) {
             \DB::table('carritos')
                 ->where('uuid', $uuid)
-                ->update(['user_id' => $user->id]); // Cambiado a user_id
+                ->update(['user_id' => $user->id]);
         }
 
-        // Obtener el uuid del carrito del cliente si existe
         $carrito = \DB::table('carritos')
-            ->where('user_id', $user->id) // Cambiado a user_id
+            ->where('user_id', $user->id)
             ->first();
 
         return response()->json([
@@ -124,6 +163,7 @@ class AuthController extends Controller
             ],
         ], 200);
     }
+
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
