@@ -18,6 +18,7 @@ use App\Http\Controllers\PedidoProgramadoController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\SolicitudRegistroController;
+use App\Http\Controllers\ImagenController;
 
 
 /*
@@ -44,6 +45,8 @@ Route::get('/categoria-productos', [Categoria::class, 'todasLasCategoriasConProd
 Route::post('/calcular-precio/{id}', [Producto::class, 'calcularPrecio']);
 Route::get('/productos-uno/{id}', [Producto::class, 'mostrar_one']);
 Route::get('/productos-proveedor/{id}', [Producto::class, 'productosPorProveedor']);
+Route::get('/imagenes', [ImagenController::class, 'index']);
+Route::post('/imagenes', [ImagenController::class, 'store']);
 
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback']);

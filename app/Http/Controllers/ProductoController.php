@@ -6,6 +6,7 @@ use App\Models\Producto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use App\Models\Imagen;
 
 class ProductoController extends Controller
 {
@@ -36,7 +37,8 @@ class ProductoController extends Controller
             'precio'        => 'required|numeric',
             'categoria_id'  => 'required|exists:categorias,id',
             'proveedor_id'  => 'required|exists:proveedors,id',
-            'imagen'        => 'required|file|max:2048',
+            'imagen'        => 'nullable|file|max:2048',
+            'imagen_url'    => 'nullable|string|max:500',
             'tipo'          => 'required|in:peso,unidad',
         ]);
 
@@ -45,18 +47,26 @@ class ProductoController extends Controller
         }
 
         $imagenUrl = null;
+
+        // Caso 1: archivo
         if ($request->hasFile('imagen')) {
             $file = $request->file('imagen');
             $mimeType = $file->getClientMimeType();
             $validMimeTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/svg+xml'];
+
             if (!in_array($mimeType, $validMimeTypes)) {
                 return response()->json(['errors' => ['imagen' => 'El tipo de archivo no es permitido']], 422);
             }
 
             $imagenPath = $file->store('imagenes', 'public');
             $imagenUrl = Storage::url($imagenPath);
+
+        // Caso 2: URL ya existente
+        } elseif ($request->filled('imagen_url')) {
+            $imagenUrl = $request->imagen_url;
         }
 
+        // Guardar producto
         $producto = Producto::create([
             'nombre'        => $request->nombre,
             'descripcion'   => $request->descripcion,
@@ -69,9 +79,15 @@ class ProductoController extends Controller
             'tipo'          => $request->tipo,
         ]);
 
+        // 👇 Guardar también en la tabla imagenes
+        Imagen::create([
+            'nombre'      => $request->nombre,       // mismo nombre que producto
+            'descripcion' => $request->descripcion,  // misma descripción
+            'url'         => $imagenUrl,             // misma URL generada o enviada
+        ]);
+
         return response()->json($producto, 201);
     }
-
     public function destroy($id)
     {
         $producto = Producto::find($id);
