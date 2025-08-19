@@ -19,7 +19,7 @@ return new class extends Migration
             $table->boolean('notificado_proveedor')->default(false);
             $table->foreignId('pedido_id')->constrained()->onDelete('cascade');
             $table->foreignId('producto_id')->constrained()->onDelete('cascade');
-            $table->foreignId('personal_sistema_id')->nullable()->constrained('personal_sistema');
+            $table->foreignId('personal_sistema_id')->nullable()->constrained('personal_sistemas');
             $table->timestamps();
         });
     }
