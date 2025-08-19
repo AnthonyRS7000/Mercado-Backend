@@ -20,8 +20,9 @@ class Pedido extends Model
 
     public function detalles_pedido()
     {
-        return $this->hasMany(Detalles_Pedido::class, 'pedido_id');
+        return $this->hasMany(DetallePedido::class, 'pedido_id');
     }
+
 
     public function metodo_pago()
     {
