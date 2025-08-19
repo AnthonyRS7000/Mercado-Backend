@@ -17,15 +17,27 @@ return new class extends Migration
             $table->integer('estado');
             $table->string('direccion_entrega');
             $table->decimal('total', 10, 2)->default(0);
-            $table->foreignId('cliente_id')->constrained()->onDelete('cascade');
+
+            // Relación con users (no con clientes)
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+
+            // Método de pago
             $table->foreignId('metodo_pago_id')->constrained()->onDelete('cascade');
+
+            // Opcional: delivery asignado
             $table->foreignId('delivery_id')->nullable()->constrained('deliveries');
-            $table->foreignId('personal_sistema_id')->nullable()->constrained('personal_sistema');
-            $table->date('fecha_entrega')->nullable();
-            $table->time('hora_entrega')->nullable();
+
+            // Opcional: personal del sistema asignado
+            $table->foreignId('personal_sistema_id')->nullable()->constrained('personal_sistemas');
+
+            // Campos de programación (en tu local aparecen así)
+            $table->date('fecha_programada')->nullable();
+            $table->time('hora_programada')->nullable();
+
             $table->timestamps();
         });
     }
+
 
     /**
      * Reverse the migrations.
