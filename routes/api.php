@@ -134,7 +134,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/proveedores/categorias/{id}', [Proveedor::class, 'categoriasPorProveedor']);
 
     // PERSONAL DE SISTEMA (recolector)
-    Route::get('/pedidos/notificados', [Apoyo::class, 'pedidosNotificados']);
+    Route::get('apoyo/pedidos/notificados', [Apoyo::class, 'pedidosNotificados']);
     Route::put('/pedidos/marcar-listo/{id}', [Apoyo::class, 'marcarProductoListo']);
     Route::get('/pedidos/listos', [Apoyo::class, 'pedidosListosParaRecoger']);
     Route::get('/pedidos/listosParaEnviar', [Pedido::class, 'getPedidosListosParaEnviar']);
