@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('entregas', function (Blueprint $table) {
             $table->id();
-            $table->dateTime('fecha_hora');
+            $table->dateTime('fecha_entrega'); // 👈 corregido
             $table->string('imagen_entregas');
             $table->string('comentario');
             $table->integer('estado');

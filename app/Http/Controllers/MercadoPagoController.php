@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Models\Pedido;
-use App\Models\detalles_pedido;
+use App\Models\DetallesPedido;
 use App\Models\Producto;
 use App\Models\Pago;
-use App\Models\Carrito; // <-- Modelo del carrito de compras
+use App\Models\Carrito;
 use MercadoPago\SDK;
 use MercadoPago\Item;
 use MercadoPago\Preference;
@@ -31,23 +31,26 @@ class MercadoPagoController extends Controller
         // Credenciales
         SDK::setAccessToken(config('services.mercadopago.token'));
 
-        // Obtener carrito real
-        $carrito = Carrito::with('productos')->where('user_id', $request->user_id)->get();
+        // Obtener carrito real con productos
+        $carritos = Carrito::with('productos')
+            ->where('user_id', $request->user_id)
+            ->get();
 
-        if ($carrito->isEmpty()) {
+        if ($carritos->isEmpty()) {
             return response()->json(['error' => 'El carrito está vacío'], 400);
         }
 
         // Construir items desde BD
         $items = [];
-        foreach ($carrito as $itemCarrito) {
-            $producto = $itemCarrito->producto; // relación producto()
-            $item = new Item();
-            $item->title       = $producto->nombre;
-            $item->quantity    = (int) $itemCarrito->cantidad;
-            $item->unit_price  = (float) $producto->precio;
-            $item->currency_id = 'PEN';
-            $items[] = $item;
+        foreach ($carritos as $carrito) {
+            foreach ($carrito->productos as $producto) {
+                $item = new Item();
+                $item->title       = $producto->nombre;
+                $item->quantity    = (int) $producto->pivot->cantidad; // 👈 desde tabla pivote
+                $item->unit_price  = (float) $producto->precio;
+                $item->currency_id = 'PEN';
+                $items[] = $item;
+            }
         }
 
         // Crear preferencia
@@ -120,18 +123,22 @@ class MercadoPagoController extends Controller
         ]);
 
         // Crear detalles del pedido desde carrito
-        $carrito = Carrito::with('producto')->where('user_id', $pedido->user_id)->get();
-        foreach ($carrito as $itemCarrito) {
-            $prod     = $itemCarrito->producto;
-            $subtotal = $prod->precio * $itemCarrito->cantidad;
+        $carritos = Carrito::with('productos')
+            ->where('user_id', $pedido->user_id)
+            ->get();
 
-            detalles_pedido::create([
-                'pedido_id'       => $pedido->id,
-                'producto_id'     => $prod->id,
-                'cantidad'        => $itemCarrito->cantidad,
-                'precio_unitario' => $prod->precio,
-                'subtotal'        => $subtotal,
-            ]);
+        foreach ($carritos as $carrito) {
+            foreach ($carrito->productos as $producto) {
+                $subtotal = $producto->precio * $producto->pivot->cantidad;
+
+                DetallesPedido::create([
+                    'pedido_id'       => $pedido->id,
+                    'producto_id'     => $producto->id,
+                    'cantidad'        => $producto->pivot->cantidad,
+                    'precio_unitario' => $producto->precio,
+                    'subtotal'        => $subtotal,
+                ]);
+            }
         }
 
         // Registrar pago
