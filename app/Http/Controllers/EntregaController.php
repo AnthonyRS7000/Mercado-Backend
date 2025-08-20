@@ -5,12 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Pedido;
 use App\Models\Entrega;
-use App\Models\detalles_pedido;
-use Illuminate\Validation\ValidationException;
+use App\Models\DetallesPedido; // 👈 corregido, modelo en PascalCase
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
-
 
 class EntregaController extends Controller
 {
@@ -96,9 +94,9 @@ class EntregaController extends Controller
                 'detalles_pedido' => function ($query) use ($id) {
                     $query->whereHas('producto', function ($subQuery) use ($id) {
                         $subQuery->where('proveedor_id', $id);
-                    })->where('notificado_proveedor', 0); // Excluir productos ya notificados
+                    })->where('notificado_proveedor', 0);
                 },
-                'detalles_pedido.producto:id,nombre,precio,stock,tipo', // Asegúrate de que el producto se incluya correctamente
+                'detalles_pedido.producto:id,nombre,precio,stock,tipo',
                 'user:id,name'
             ])
             ->orderBy('created_at', 'asc')
@@ -106,7 +104,6 @@ class EntregaController extends Controller
 
         return response()->json($pedidos);
     }
-
 
     public function notificarRecolector(Request $request, $pedido_id)
     {
@@ -116,8 +113,8 @@ class EntregaController extends Controller
             return response()->json(['error' => 'Pedido no encontrado'], 404);
         }
 
-        // Actualizar solo el producto específico a notificado_proveedor = 2
-        $detalle = Detalles_Pedido::where('pedido_id', $pedido_id)
+        // ✅ Usar modelo correcto
+        $detalle = DetallesPedido::where('pedido_id', $pedido_id)
             ->where('producto_id', $request->producto_id)
             ->first();
 
@@ -125,18 +122,16 @@ class EntregaController extends Controller
             return response()->json(['message' => 'Detalle de pedido no encontrado'], 404);
         }
 
-        // Cambiar el estado del producto seleccionado a 2
+        // Cambiar el estado del producto seleccionado a notificado_proveedor = 1
         $detalle->update([
             'notificado_proveedor' => 1
         ]);
 
-        // Cambiar el estado del pedido a 2 sin importar los otros productos
+        // Cambiar el estado del pedido a 2
         $pedido->update(['estado' => 2]);
 
-        // Mensaje para la plataforma y WhatsApp
         $mensaje = "📦 Pedido #$pedido->id tiene productos listos para recoger.";
-
-        $numeroRecolector = "51921013989"; // Reemplazar con número real
+        $numeroRecolector = "51948245328";
         $linkWhatsapp = "https://wa.me/$numeroRecolector?text=" . urlencode($mensaje);
 
         return response()->json([
