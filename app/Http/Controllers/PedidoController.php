@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Pedido;
 use App\Models\Producto;
-use App\Models\detalles_pedido;
+use App\Models\DetallesPedido; // 👈 corregido
 use App\Models\Personal_Sistema;
 use App\Models\Delivery;
 use App\Models\Cliente;
@@ -15,86 +15,66 @@ use Illuminate\Support\Facades\Validator;
 
 class PedidoController extends Controller
 {
-public function store(Request $request)
-{
-    // 0) Loguear configuración de conexión para debug
-    \Log::info('DB connection info', [
-        'driver'   => config('database.default'),
-        'host'     => config('database.connections.mysql.host'),
-        'database' => config('database.connections.mysql.database'),
-        'username' => config('database.connections.mysql.username'),
-    ]);
-
-    // 1) Validación
-    $validator = Validator::make($request->all(), [
-        'fecha'               => 'required|date',
-        'estado'              => 'required|integer',
-        'direccion_entrega'   => 'required|string|max:255',
-        'user_id'             => 'required|exists:users,id',
-        'metodo_pago_id'      => 'required|exists:metodo_pagos,id',
-        'fecha_programada'    => 'nullable|date|after_or_equal:today',
-        'hora_programada'     => 'nullable|date_format:H:i',
-        'productos'           => 'required|array|min:1',
-        'productos.*.producto_id' => 'required|exists:productos,id',
-        'productos.*.cantidad'    => 'required|numeric|min:0.1',
-    ]);
-
-    if ($validator->fails()) {
-        \Log::warning('Validation failed (store pedido)', $validator->errors()->toArray());
-        return response()->json(['errors' => $validator->errors()], 422);
-    }
-
-    // 2) Crear pedido base
-    $pedido = Pedido::create([
-        'fecha'             => $request->fecha,
-        'estado'            => $request->estado,
-        'direccion_entrega' => $request->direccion_entrega,
-        'user_id'           => $request->user_id,
-        'metodo_pago_id'    => $request->metodo_pago_id,
-        'fecha_programada'  => $request->fecha_programada,
-        'hora_programada'   => $request->hora_programada,
-        'total'             => 0, // lo ajustaremos abajo
-    ]);
-    \Log::info('Pedido inicial creado', ['pedido_id' => $pedido->id]);
-
-    // 3) Insertar detalles y acumular total
-    $total = 0;
-    foreach ($request->productos as $p) {
-        $prod = Producto::findOrFail($p['producto_id']);
-        $subtotal = $prod->precio * $p['cantidad'];
-
-        detalles_pedido::create([
-            'pedido_id'       => $pedido->id,
-            'producto_id'     => $prod->id,
-            'cantidad'        => $p['cantidad'],
-            'precio_unitario' => $prod->precio,
-            'subtotal'        => $subtotal,
+    public function store(Request $request)
+    {
+        // 1) Validación
+        $validator = Validator::make($request->all(), [
+            'fecha'               => 'required|date',
+            'estado'              => 'required|integer',
+            'direccion_entrega'   => 'required|string|max:255',
+            'user_id'             => 'required|exists:users,id',
+            'metodo_pago_id'      => 'required|exists:metodo_pagos,id',
+            'fecha_programada'    => 'nullable|date|after_or_equal:today',
+            'hora_programada'     => 'nullable|date_format:H:i',
+            'productos'           => 'required|array|min:1',
+            'productos.*.producto_id' => 'required|exists:productos,id',
+            'productos.*.cantidad'    => 'required|numeric|min:0.1',
         ]);
 
-        $total += $subtotal;
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // 2) Crear pedido base
+        $pedido = Pedido::create([
+            'fecha'             => $request->fecha,
+            'estado'            => $request->estado,
+            'direccion_entrega' => $request->direccion_entrega,
+            'user_id'           => $request->user_id,
+            'metodo_pago_id'    => $request->metodo_pago_id,
+            'fecha_programada'  => $request->fecha_programada,
+            'hora_programada'   => $request->hora_programada,
+            'total'             => 0,
+        ]);
+
+        // 3) Insertar detalles y acumular total
+        $total = 0;
+        foreach ($request->productos as $p) {
+            $prod = Producto::findOrFail($p['producto_id']);
+            $subtotal = $prod->precio * $p['cantidad'];
+
+            DetallesPedido::create([ // 👈 corregido
+                'pedido_id'       => $pedido->id,
+                'producto_id'     => $prod->id,
+                'cantidad'        => $p['cantidad'],
+                'precio_unitario' => $prod->precio,
+                'subtotal'        => $subtotal,
+            ]);
+
+            $total += $subtotal;
+        }
+
+        // 4) Guardar total y refrescar instancia
+        $pedido->total = $total;
+        $pedido->save();
+        $pedido->refresh();
+
+        // 5) Responder con el pedido ya cargado de nuevo
+        return response()->json(
+            $pedido->load('detalles_pedido.producto'),
+            201
+        );
     }
-    \Log::info('Detalles de pedido insertados', [
-        'pedido_id' => $pedido->id,
-        'total_calculado' => $total,
-    ]);
-
-    // 4) Guardar total y refrescar instancia
-    $pedido->total = $total;
-    $pedido->save();
-    $pedido->refresh();
-    \Log::info('Pedido completado con detalles', [
-        'pedido_id' => $pedido->id,
-        'pedido'    => $pedido->toArray(),
-    ]);
-
-    // 5) Responder con el pedido ya cargado de nuevo
-    return response()->json(
-        $pedido->load('detalles_pedido.producto'),
-        201
-    );
-}
-
-
 
     public function getLastPedido($userId)
     {
@@ -110,25 +90,25 @@ public function store(Request $request)
         return response()->json($pedido, 200);
     }
 
-public function getPedidosByUserId($userId)
-{
-    $pedidos = Pedido::where('user_id', $userId)
-                     ->with('detalles_pedido.producto')
-                     ->orderBy('created_at', 'desc')
-                     ->get();
+    public function getPedidosByUserId($userId)
+    {
+        $pedidos = Pedido::where('user_id', $userId)
+                         ->with('detalles_pedido.producto')
+                         ->orderBy('created_at', 'desc')
+                         ->get();
 
-    if ($pedidos->isEmpty()) {
-        return response()->json(['message' => 'No se encontraron pedidos para este usuario.'], 404);
+        if ($pedidos->isEmpty()) {
+            return response()->json(['message' => 'No se encontraron pedidos para este usuario.'], 404);
+        }
+
+        return response()->json($pedidos, 200);
     }
-
-    return response()->json($pedidos, 200);
-}
-
 
     public function getPedidosPendientes()
     {
-        $pedidos = Pedido::where('estado', 2)->with('detalles_pedido.producto')->get();
-        \Log::info('Pedidos con estado 2:', $pedidos->toArray());
+        $pedidos = Pedido::where('estado', 2)
+                         ->with('detalles_pedido.producto')
+                         ->get();
 
         return $pedidos->isEmpty()
             ? response()->json(['message' => 'No se encontraron pedidos pendientes.'], 404)
@@ -138,9 +118,9 @@ public function getPedidosByUserId($userId)
     public function getPedidosListosParaEnviar()
     {
         $pedidos = Pedido::where('estado', 3)
-                        ->with(['detalles_pedido.producto', 'user']) // Incluye también al usuario si lo necesitas
-                        ->orderBy('created_at', 'desc')
-                        ->get();
+                         ->with(['detalles_pedido.producto', 'user'])
+                         ->orderBy('created_at', 'desc')
+                         ->get();
 
         if ($pedidos->isEmpty()) {
             return response()->json(['message' => 'No se encontraron pedidos con estado 3 (listos para recoger).'], 404);
@@ -181,7 +161,6 @@ public function getPedidosByUserId($userId)
         ->get();
 
         foreach ($pedidos as $pedido) {
-            // Busca primero en personal_sistemas
             $personal = Personal_Sistema::where('user_id', $pedido->user_id)->first();
             if ($personal) {
                 $pedido->comprador = [
@@ -190,7 +169,6 @@ public function getPedidosByUserId($userId)
                     'celular' => $personal->celular,
                 ];
             } else {
-                // Luego busca en deliveries
                 $delivery = Delivery::where('user_id', $pedido->user_id)->first();
                 if ($delivery) {
                     $pedido->comprador = [
@@ -199,7 +177,6 @@ public function getPedidosByUserId($userId)
                         'celular' => $delivery->celular,
                     ];
                 } else {
-                    // Luego busca en clientes
                     $cliente = Cliente::where('user_id', $pedido->user_id)->first();
                     if ($cliente) {
                         $pedido->comprador = [
@@ -208,7 +185,6 @@ public function getPedidosByUserId($userId)
                             'celular' => $cliente->celular,
                         ];
                     } else {
-                        // Luego busca en proveedores
                         $proveedor = Proveedor::where('user_id', $pedido->user_id)->first();
                         if ($proveedor) {
                             $pedido->comprador = [
@@ -217,7 +193,6 @@ public function getPedidosByUserId($userId)
                                 'celular' => $proveedor->celular,
                             ];
                         } else {
-                            // Si no encuentra ninguno, deja en null
                             $pedido->comprador = null;
                         }
                     }
@@ -229,7 +204,6 @@ public function getPedidosByUserId($userId)
             return response()->json(['message' => 'No se encontraron pedidos pendientes.'], 404);
         }
 
-        // Si quieres estructurar el JSON puedes hacer un map (opcional)
         $response = $pedidos->map(function ($pedido) {
             return [
                 'id' => $pedido->id,
@@ -237,8 +211,8 @@ public function getPedidosByUserId($userId)
                 'estado' => $pedido->estado,
                 'direccion_entrega' => $pedido->direccion_entrega,
                 'total' => $pedido->total,
-                'user' => $pedido->user, // nombre usuario del sistema
-                'comprador' => $pedido->comprador, // nombre que buscamos
+                'user' => $pedido->user,
+                'comprador' => $pedido->comprador,
                 'detalles_pedido' => $pedido->detalles_pedido,
             ];
         });
@@ -246,22 +220,18 @@ public function getPedidosByUserId($userId)
         return response()->json($response, 200);
     }
 
-
     public function aceptarPedidoDelivery(Request $request, $pedidoId)
     {
-        // Validar que el delivery_id esté presente y sea válido
         $request->validate([
             'delivery_id' => 'required|exists:deliveries,id',
         ]);
 
-        // Buscar el pedido por ID
         $pedido = Pedido::find($pedidoId);
 
         if (!$pedido) {
             return response()->json(['message' => 'Pedido no encontrado.'], 404);
         }
 
-        // Registrar intento en el historial
         DB::table('historial_intentos_delivery')->insert([
             'pedido_id' => $pedidoId,
             'delivery_id' => $request->delivery_id,
@@ -269,19 +239,16 @@ public function getPedidosByUserId($userId)
             'created_at' => now(),
         ]);
 
-        // Asignar el delivery y actualizar el estado del pedido
-        $pedido->estado = 20; // Cambiar el estado a "aceptado"
-        $pedido->delivery_id = $request->delivery_id; // Asignar el delivery
+        $pedido->estado = 20;
+        $pedido->delivery_id = $request->delivery_id;
         $pedido->save();
 
-        // Redirigir a la vista del pedido específico, o devolver la información en la respuesta
         return response()->json([
             'message' => 'Pedido aceptado por delivery',
-            'pedido' => $pedido, // Retorna los detalles del pedido actualizado
-            'redirect_to' => url("/admin/pedido/{$pedidoId}") // Incluir la URL del pedido para redirigir
+            'pedido' => $pedido,
+            'redirect_to' => url("/admin/pedido/{$pedidoId}")
         ]);
     }
-
 
     public function actualizarEstadoEnRuta(Request $request, $pedidoId)
     {
@@ -313,7 +280,6 @@ public function getPedidosByUserId($userId)
             return response()->json(['message' => 'Pedido no encontrado.'], 404);
         }
 
-        // Registrar cancelación
         DB::table('historial_intentos_delivery')->insert([
             'pedido_id' => $pedidoId,
             'delivery_id' => $request->delivery_id,
@@ -321,7 +287,7 @@ public function getPedidosByUserId($userId)
             'created_at' => now(),
         ]);
 
-        $pedido->estado = 10; // Vuelve a estar disponible
+        $pedido->estado = 10;
         $pedido->delivery_id = null;
         $pedido->save();
 
@@ -330,9 +296,8 @@ public function getPedidosByUserId($userId)
 
     public function getPedidoById(Request $request, $pedidoId, $deliveryId)
     {
-        // Buscar el pedido
         $pedido = Pedido::with([
-            'user', // Cargar siempre el usuario
+            'user',
             'detalles_pedido.producto'
         ])->find($pedidoId);
 
@@ -340,15 +305,12 @@ public function getPedidosByUserId($userId)
             return response()->json(['message' => 'Pedido no encontrado.'], 404);
         }
 
-        // Verificar si el pedido pertenece al delivery
         if ($pedido->delivery_id !== (int)$deliveryId) {
             return response()->json(['message' => 'Este pedido no está asignado a este delivery.'], 403);
         }
 
-        // Cargar dinámicamente los datos dependiendo del rol
         $user = $pedido->user;
 
-        // Puedes agregar una columna 'rol' en users, o verificar con relaciones existentes
         if ($user->cliente) {
             $userData = $user->cliente;
             $tipoUsuario = 'cliente';
@@ -363,7 +325,6 @@ public function getPedidosByUserId($userId)
             $tipoUsuario = 'desconocido';
         }
 
-        // Preparar la respuesta
         return response()->json([
             'pedido' => $pedido,
             'user_data' => $userData,
@@ -371,11 +332,10 @@ public function getPedidosByUserId($userId)
         ], 200);
     }
 
-
     public function getPedidoActivo($deliveryId)
     {
         $pedido = Pedido::where('delivery_id', $deliveryId)
-                        ->whereIn('estado', [4, 20, 30]) // o los estados que signifiquen "en curso"
+                        ->whereIn('estado', [4, 20, 30])
                         ->first();
 
         if ($pedido) {

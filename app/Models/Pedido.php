@@ -7,7 +7,7 @@ use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Models\Cliente;
 use App\Models\User;
-use App\Models\Detalles_Pedido;
+use App\Models\DetallesPedido;
 
 
 class Pedido extends Model
@@ -20,7 +20,7 @@ class Pedido extends Model
 
     public function detalles_pedido()
     {
-        return $this->hasMany(DetallePedido::class, 'pedido_id');
+        return $this->hasMany(DetallesPedido::class, 'pedido_id');
     }
 
 
