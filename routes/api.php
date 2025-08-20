@@ -112,7 +112,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // DELIVERY
     Route::put('/modificar-estado-pedido', [Delivery::class, 'updatePedidoEstado']);
     Route::get('delivery/pedidos/pendientes', [Delivery::class, 'getPedidosPendientes']);
-    Route::get('/pedidos/pedidos-delivery', [Pedido::class, 'pedidosParaRecoger']);
+    Route::get('delivery/pedidos/pedidos-delivery', [Pedido::class, 'pedidosParaRecoger']);
     Route::put('/pedidos/aceptar/{pedidoId}', [Pedido::class, 'aceptarPedidoDelivery']);
     Route::put('/pedidos/en-ruta/{pedidoId}', [Pedido::class, 'actualizarEstadoEnRuta']);
     Route::put('/pedidos/cancelar/{pedidoId}', [Pedido::class, 'cancelarPedidoDelivery']);

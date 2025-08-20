@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Pedido;
 use App\Models\Producto;
 use App\Models\DetallesPedido; // 👈 corregido
-use App\Models\Personal_Sistema;
+use App\Models\PersonalSistema; // 👈 corregido
 use App\Models\Delivery;
 use App\Models\Cliente;
 use App\Models\Proveedor;
@@ -17,7 +17,6 @@ class PedidoController extends Controller
 {
     public function store(Request $request)
     {
-        // 1) Validación
         $validator = Validator::make($request->all(), [
             'fecha'               => 'required|date',
             'estado'              => 'required|integer',
@@ -35,7 +34,6 @@ class PedidoController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // 2) Crear pedido base
         $pedido = Pedido::create([
             'fecha'             => $request->fecha,
             'estado'            => $request->estado,
@@ -47,13 +45,12 @@ class PedidoController extends Controller
             'total'             => 0,
         ]);
 
-        // 3) Insertar detalles y acumular total
         $total = 0;
         foreach ($request->productos as $p) {
             $prod = Producto::findOrFail($p['producto_id']);
             $subtotal = $prod->precio * $p['cantidad'];
 
-            DetallesPedido::create([ // 👈 corregido
+            DetallesPedido::create([
                 'pedido_id'       => $pedido->id,
                 'producto_id'     => $prod->id,
                 'cantidad'        => $p['cantidad'],
@@ -64,12 +61,10 @@ class PedidoController extends Controller
             $total += $subtotal;
         }
 
-        // 4) Guardar total y refrescar instancia
         $pedido->total = $total;
         $pedido->save();
         $pedido->refresh();
 
-        // 5) Responder con el pedido ya cargado de nuevo
         return response()->json(
             $pedido->load('detalles_pedido.producto'),
             201
@@ -161,7 +156,7 @@ class PedidoController extends Controller
         ->get();
 
         foreach ($pedidos as $pedido) {
-            $personal = Personal_Sistema::where('user_id', $pedido->user_id)->first();
+            $personal = PersonalSistema::where('user_id', $pedido->user_id)->first();
             if ($personal) {
                 $pedido->comprador = [
                     'nombre' => $personal->nombre,
