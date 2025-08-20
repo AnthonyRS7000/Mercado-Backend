@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Personal_sistema extends Model
+class Personal_Sistema extends Model
 {
     use HasFactory;
     protected $fillable = [
@@ -13,7 +13,7 @@ class Personal_sistema extends Model
         'dni',
         'celular',
         'user_id',
-    ];  
+    ];
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
@@ -23,5 +23,5 @@ class Personal_sistema extends Model
     {
         return $this->belongsTo(Personal_Sistema::class, 'personal_sistema_id');
     }
-    
+
 }
