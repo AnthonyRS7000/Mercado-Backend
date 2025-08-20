@@ -2,16 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Personal_Sistema;
+use App\Models\PersonalSistema;
 use App\Models\Delivery;
 use App\Models\Proveedor;
 use App\Models\Cliente;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Pedido;
-use App\Models\DetallesPedido; // 👈 corregido
+use App\Models\DetallesPedido;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
@@ -19,7 +18,7 @@ class PersonalSistemaController extends Controller
 {
     public function index()
     {
-        $personalSistemas = Personal_Sistema::select('personal_sistemas.*', 'users.email')
+        $personalSistemas = PersonalSistema::select('personal_sistemas.*', 'users.email')
             ->join('users', 'personal_sistemas.user_id', '=', 'users.id')
             ->get();
 
@@ -28,7 +27,7 @@ class PersonalSistemaController extends Controller
 
     public function show($id)
     {
-        $personalSistema = Personal_Sistema::find($id);
+        $personalSistema = PersonalSistema::find($id);
 
         if (!$personalSistema) {
             return response()->json(['error' => 'Personal de sistemas no encontrado.'], 404);
@@ -64,7 +63,7 @@ class PersonalSistemaController extends Controller
             'role_id' => $role->id,
         ]);
 
-        $personalSistema = Personal_Sistema::create([
+        $personalSistema = PersonalSistema::create([
             'nombre' => $request->nombre,
             'dni' => $request->dni,
             'celular' => $request->celular,
@@ -76,7 +75,7 @@ class PersonalSistemaController extends Controller
 
     public function update(Request $request, $id)
     {
-        $personalSistema = Personal_Sistema::find($id);
+        $personalSistema = PersonalSistema::find($id);
         if (!$personalSistema) {
             return response()->json(['error' => 'Personal de sistemas no encontrado.'], 404);
         }
@@ -95,7 +94,7 @@ class PersonalSistemaController extends Controller
 
     public function destroy($id)
     {
-        $personalSistema = Personal_Sistema::find($id);
+        $personalSistema = PersonalSistema::find($id);
         if (!$personalSistema) {
             return response()->json(['error' => 'Personal de sistemas no encontrado.'], 404);
         }
@@ -197,7 +196,7 @@ class PersonalSistemaController extends Controller
             ->get();
 
         foreach ($pedidos as $pedido) {
-            $personal = Personal_Sistema::where('user_id', $pedido->user_id)->first();
+            $personal = PersonalSistema::where('user_id', $pedido->user_id)->first();
             if ($personal) {
                 $pedido->comprador = [
                     'nombre' => $personal->nombre,
