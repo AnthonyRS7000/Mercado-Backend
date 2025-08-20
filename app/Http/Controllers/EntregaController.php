@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Pedido;
 use App\Models\Entrega;
-use App\Models\DetallesPedido; // 👈 corregido, modelo en PascalCase
+use App\Models\DetallesPedido; // ✅ modelo corregido
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
@@ -17,20 +17,20 @@ class EntregaController extends Controller
         Log::info('Iniciando la creación de entrega', ['request_data' => $request->all()]);
 
         $validator = Validator::make($request->all(), [
-            'fecha_entrega' => 'required|date',
+            'fecha_entrega'   => 'required|date',
             'imagen_entregas' => 'required|file|max:2048',
-            'comentario' => 'required|string',
-            'estado' => 'required|integer|in:0,1,2,3',
-            'precio' => 'required|numeric',
-            'pedido_id' => 'required|exists:pedidos,id',
-            'delivery_id' => 'required|exists:deliveries,id'
+            'comentario'      => 'required|string',
+            'estado'          => 'required|integer|in:0,1,2,3',
+            'precio'          => 'required|numeric',
+            'pedido_id'       => 'required|exists:pedidos,id',
+            'delivery_id'     => 'required|exists:deliveries,id'
         ]);
 
         if ($validator->fails()) {
             Log::error('Error de validación al crear entrega', ['errors' => $validator->errors()]);
             return response()->json([
                 'message' => 'Error de validación',
-                'errors' => $validator->errors()
+                'errors'  => $validator->errors()
             ], 422);
         }
 
@@ -55,13 +55,13 @@ class EntregaController extends Controller
 
         try {
             $entrega = Entrega::create([
-                'fecha_entrega' => $request->fecha_entrega,
+                'fecha_entrega'   => $request->fecha_entrega,
                 'imagen_entregas' => $imageUrl ?? null,
-                'comentario' => $request->comentario,
-                'estado' => (int) $request->estado,
-                'precio' => $request->precio,
-                'pedido_id' => $request->pedido_id,
-                'delivery_id' => $request->delivery_id
+                'comentario'      => $request->comentario,
+                'estado'          => (int) $request->estado,
+                'precio'          => $request->precio,
+                'pedido_id'       => $request->pedido_id,
+                'delivery_id'     => $request->delivery_id
             ]);
 
             // ✅ Cambiar estado del pedido a 5 (entregado)
@@ -74,12 +74,18 @@ class EntregaController extends Controller
 
             return response()->json([
                 'message' => 'Entrega creada con éxito y estado del pedido actualizado',
-                'data' => $entrega
+                'data'    => $entrega
             ], 201);
 
         } catch (\Exception $e) {
-            Log::error('Error al crear la entrega', ['exception' => $e->getMessage()]);
-            return response()->json(['error' => 'Error al crear la entrega'], 500);
+            Log::error('Error al crear la entrega', [
+                'exception' => $e->getMessage(),
+                'trace'     => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'error'    => 'Error al crear la entrega',
+                'detalles' => $e->getMessage() // 👈 aquí verás el error real
+            ], 500);
         }
     }
 
@@ -88,7 +94,7 @@ class EntregaController extends Controller
         $pedidos = Pedido::whereHas('detalles_pedido', function ($query) use ($id) {
                 $query->whereHas('producto', function ($subQuery) use ($id) {
                     $subQuery->where('proveedor_id', $id);
-                })->where('notificado_proveedor', 0); // Excluir productos ya notificados
+                })->where('notificado_proveedor', 0);
             })
             ->with([
                 'detalles_pedido' => function ($query) use ($id) {
@@ -113,7 +119,6 @@ class EntregaController extends Controller
             return response()->json(['error' => 'Pedido no encontrado'], 404);
         }
 
-        // ✅ Usar modelo correcto
         $detalle = DetallesPedido::where('pedido_id', $pedido_id)
             ->where('producto_id', $request->producto_id)
             ->first();
@@ -122,12 +127,10 @@ class EntregaController extends Controller
             return response()->json(['message' => 'Detalle de pedido no encontrado'], 404);
         }
 
-        // Cambiar el estado del producto seleccionado a notificado_proveedor = 1
         $detalle->update([
             'notificado_proveedor' => 1
         ]);
 
-        // Cambiar el estado del pedido a 2
         $pedido->update(['estado' => 2]);
 
         $mensaje = "📦 Pedido #$pedido->id tiene productos listos para recoger.";
@@ -135,9 +138,9 @@ class EntregaController extends Controller
         $linkWhatsapp = "https://wa.me/$numeroRecolector?text=" . urlencode($mensaje);
 
         return response()->json([
-            'message' => 'Producto notificado como listo para el recolector',
-            'mensaje_plataforma' => $mensaje,
-            'link_whatsapp' => $linkWhatsapp
+            'message'           => 'Producto notificado como listo para el recolector',
+            'mensaje_plataforma'=> $mensaje,
+            'link_whatsapp'     => $linkWhatsapp
         ]);
     }
 }
