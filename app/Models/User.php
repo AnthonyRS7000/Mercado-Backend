@@ -2,22 +2,15 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Models\Cliente;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'name',
         'email',
@@ -25,46 +18,34 @@ class User extends Authenticatable
         'role_id',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
 
-
     public function cliente()
     {
-        return $this->hasOne(Cliente::class);
+        return $this->hasOne(Cliente::class, 'user_id');
     }
-
 
     public function delivery()
     {
-        return $this->hasOne(Delivery::class);
+        return $this->hasOne(Delivery::class, 'user_id');
     }
 
     public function proveedor()
     {
-        return $this->hasOne(Proveedor::class);
+        return $this->hasOne(Proveedor::class, 'user_id');
     }
 
     public function personalSistema()
     {
-        return $this->hasOne(Personal_sistema::class, 'user_id', 'id');
+        return $this->hasOne(PersonalSistema::class, 'user_id');
     }
 
     public function role()
