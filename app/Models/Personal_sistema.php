@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Personal_Sistema extends Model
 {
+    protected $table = 'personal_sistemas';
+
     use HasFactory;
     protected $fillable = [
         'nombre',
