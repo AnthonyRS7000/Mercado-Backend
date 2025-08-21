@@ -151,8 +151,10 @@ class MercadoPagoController extends Controller
         }
 
         // Recuperar metadata
+// Recuperar metadata
         $meta = [];
-        $prefId = $payment->preference_id; // ✅ usar solo preference_id
+        $paymentArray = $payment->toArray();
+        $prefId = $paymentArray['preference_id'] ?? null;
 
         try {
             Log::info("Buscando preferencia asociada", ['prefId' => $prefId]);
@@ -166,6 +168,7 @@ class MercadoPagoController extends Controller
         } catch (\Exception $e) {
             Log::error("❌ Error recuperando preferencia de MP", ['error' => $e->getMessage()]);
         }
+
 
         Log::info("Metadata recuperada", ['meta' => $meta]);
 
