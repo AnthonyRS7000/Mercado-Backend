@@ -68,7 +68,7 @@ class MercadoPagoController extends Controller
         $pref->notification_url = config('app.url') . '/api/mp/webhook';
         $pref->save();
 
-        Log::info('Preferencia creada en MercadoPago', [
+        Log::info('✅ Preferencia creada en MercadoPago', [
             'pref_id'    => $pref->id,
             'init_point' => $pref->init_point,
             'metadata'   => (array) $pref->metadata,
@@ -86,30 +86,37 @@ class MercadoPagoController extends Controller
     public function webhook(Request $request)
     {
         $data = $request->all();
-        Log::info('Webhook MercadoPago recibido', ['data' => $data]);
+        Log::info('🌐 Webhook MercadoPago recibido', ['data' => $data]);
 
         $topic = $data['topic'] ?? $data['type'] ?? null;
 
         SDK::setAccessToken(config('services.mercadopago.token'));
 
+        // Caso PAYMENT
         if ($topic === 'payment') {
             $paymentId = data_get($data, 'data.id') ?? data_get($data, 'id');
-            Log::info("Procesando webhook de tipo payment", ['paymentId' => $paymentId]);
+            Log::info("🔔 Procesando webhook de tipo payment", ['paymentId' => $paymentId]);
             if ($paymentId) {
                 $this->procesarPago($paymentId);
             }
         }
 
+        // Caso MERCHANT_ORDER
         if ($topic === 'merchant_order') {
             $orderId = $data['id'] ?? null;
-            Log::info("Procesando webhook de tipo merchant_order", ['orderId' => $orderId]);
+            Log::info("🔔 Procesando webhook de tipo merchant_order", ['orderId' => $orderId]);
             if ($orderId) {
                 $order = MerchantOrder::find_by_id($orderId);
                 if ($order && $order->payments) {
                     foreach ($order->payments as $pay) {
-                        Log::info("Pago encontrado en merchant_order", (array) $pay);
+                        Log::info("🧾 Pago encontrado en merchant_order", (array) $pay);
                         if ($pay->status === 'approved') {
-                            $this->procesarPago($pay->id);
+                            // Evitar duplicados
+                            if (!Pago::where('mp_payment_id', $pay->id)->exists()) {
+                                $this->procesarPago($pay->id);
+                            } else {
+                                Log::warning("⚠️ Pago ya procesado, se omite en merchant_order", ['paymentId' => $pay->id]);
+                            }
                         }
                     }
                 }
@@ -133,7 +140,7 @@ class MercadoPagoController extends Controller
             return;
         }
 
-        Log::info("Datos del pago recibido", [
+        Log::info("📄 Datos del pago recibido", [
             'id'       => $payment->id,
             'status'   => $payment->status,
             'amount'   => $payment->transaction_amount,
@@ -141,12 +148,15 @@ class MercadoPagoController extends Controller
         ]);
 
         if ($payment->status !== 'approved') {
-            Log::warning('⚠️ Pago no aprobado', ['paymentId' => $paymentId, 'status' => $payment->status]);
+            Log::warning('⚠️ Pago no aprobado, no se genera pedido', [
+                'paymentId' => $paymentId,
+                'status'    => $payment->status
+            ]);
             return;
         }
 
         if (Pago::where('mp_payment_id', $payment->id)->exists()) {
-            Log::warning("⚠️ Pago duplicado detectado", ['paymentId' => $payment->id]);
+            Log::warning("⚠️ Pago duplicado detectado, se omite", ['paymentId' => $payment->id]);
             return;
         }
 
@@ -157,7 +167,6 @@ class MercadoPagoController extends Controller
         $prefId = null;
 
         try {
-            // convertir a array completo
             $paymentArray = json_decode(json_encode($payment), true);
             $prefId = $paymentArray['preference_id'] ?? null;
 
@@ -167,7 +176,7 @@ class MercadoPagoController extends Controller
                 $prefId = $order->preference_id ?? null;
             }
 
-            Log::info("Buscando preferencia asociada", ['prefId' => $prefId]);
+            Log::info("🔗 Buscando preferencia asociada", ['prefId' => $prefId]);
 
             if ($prefId) {
                 $pref = Preference::find_by_id($prefId);
@@ -179,7 +188,7 @@ class MercadoPagoController extends Controller
             Log::error("❌ Error recuperando preferencia de MP", ['error' => $e->getMessage()]);
         }
 
-        Log::info("Metadata recuperada", ['meta' => $meta]);
+        Log::info("📦 Metadata recuperada", ['meta' => $meta]);
 
         // --------------------------------------
         // Crear pedido
@@ -224,6 +233,7 @@ class MercadoPagoController extends Controller
 
         Log::info("✅ Pedido actualizado con total", ['pedidoId' => $pedido->id, 'total' => $total]);
 
+        // Registrar pago
         Pago::create([
             'pedido_id'          => $pedido->id,
             'user_id'            => $pedido->user_id,
@@ -240,6 +250,7 @@ class MercadoPagoController extends Controller
 
         Log::info("💵 Pago registrado en BD", ['paymentId' => $payment->id]);
 
+        // Vaciar carrito
         Carrito::where('user_id', $pedido->user_id)->delete();
 
         Log::info("🧹 Carrito vaciado", ['userId' => $pedido->user_id]);
