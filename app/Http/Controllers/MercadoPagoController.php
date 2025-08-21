@@ -71,7 +71,7 @@ class MercadoPagoController extends Controller
         Log::info('Preferencia creada en MercadoPago', [
             'pref_id'    => $pref->id,
             'init_point' => $pref->init_point,
-            'metadata'   => $pref->metadata,
+            'metadata'   => (array) $pref->metadata,
         ]);
 
         return response()->json([
@@ -107,7 +107,7 @@ class MercadoPagoController extends Controller
                 $order = MerchantOrder::find_by_id($orderId);
                 if ($order && $order->payments) {
                     foreach ($order->payments as $pay) {
-                        Log::info("Pago encontrado en merchant_order", $pay);
+                        Log::info("Pago encontrado en merchant_order", (array) $pay);
                         if ($pay['status'] === 'approved') {
                             $this->procesarPago($pay['id']);
                         }
@@ -152,14 +152,18 @@ class MercadoPagoController extends Controller
 
         // Recuperar metadata
         $meta = [];
+        $prefId = $payment->preference_id ?? ($payment->order->id ?? null);
+
         try {
-            $prefId = $payment->preference_id ?? ($payment->order->id ?? null);
             Log::info("Buscando preferencia asociada", ['prefId' => $prefId]);
 
             if ($prefId) {
                 $pref = Preference::find_by_id($prefId);
                 if ($pref && isset($pref->metadata)) {
-                    $meta = json_decode(json_encode($pref->metadata), true);
+                    $meta = (array) $pref->metadata;
+                    if (isset($meta['stdClass'])) {
+                        $meta = (array) $meta['stdClass'];
+                    }
                 }
             }
         } catch (\Exception $e) {
@@ -172,7 +176,7 @@ class MercadoPagoController extends Controller
         $pedido = Pedido::create([
             'fecha'             => now()->toDateString(),
             'estado'            => 1,
-            'direccion_entrega' => $meta['direccion_entrega'] ?? null,
+            'direccion_entrega' => $meta['direccion_entrega'] ?? 'NO DEFINIDA',
             'user_id'           => $meta['user_id'] ?? null,
             'metodo_pago_id'    => 2,
             'total'             => 0,
