@@ -150,13 +150,23 @@ class MercadoPagoController extends Controller
             return;
         }
 
-        // Recuperar metadata
-// Recuperar metadata
+        // --------------------------------------
+        // Recuperar metadata desde preference_id
+        // --------------------------------------
         $meta = [];
-        $paymentArray = $payment->toArray();
-        $prefId = $paymentArray['preference_id'] ?? null;
+        $prefId = null;
 
         try {
+            // convertir a array completo
+            $paymentArray = json_decode(json_encode($payment), true);
+            $prefId = $paymentArray['preference_id'] ?? null;
+
+            // fallback: obtener desde merchant_order
+            if (!$prefId && isset($payment->order->id)) {
+                $order = MerchantOrder::find_by_id($payment->order->id);
+                $prefId = $order->preference_id ?? null;
+            }
+
             Log::info("Buscando preferencia asociada", ['prefId' => $prefId]);
 
             if ($prefId) {
@@ -169,10 +179,11 @@ class MercadoPagoController extends Controller
             Log::error("❌ Error recuperando preferencia de MP", ['error' => $e->getMessage()]);
         }
 
-
         Log::info("Metadata recuperada", ['meta' => $meta]);
 
+        // --------------------------------------
         // Crear pedido
+        // --------------------------------------
         $pedido = Pedido::create([
             'fecha'             => now()->toDateString(),
             'estado'            => 1,
