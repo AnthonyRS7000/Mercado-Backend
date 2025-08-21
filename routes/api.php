@@ -30,7 +30,6 @@ use App\Http\Controllers\ImagenController;
 // ------------------------
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/productos', [Producto::class, 'index']);
-Route::post('/carrito/vaciar', [ProductosCarritoController::class, 'vaciarPorUserId']);
 Route::post('/v1/cliente', [Cliente::class, 'store']);
 Route::post('/solicitudes', [SolicitudRegistroController::class, 'store']);
 
@@ -53,14 +52,17 @@ Route::post('/auth/google-login', [GoogleAuthController::class, 'handleGoogleLog
 // Categorías
 Route::apiResource('/v1/categorias', Categoria::class);
 
-// Carrito (público con UUID, merge, etc.)
-Route::get('/carrito', [ProductosCarritoController::class, 'index']);
-Route::post('/carrito/agregar', [ProductosCarritoController::class, 'agregar']);
+// =============================
+// 🔹 Carrito público (Invitado)
+// =============================
+Route::get('/carrito', [ProductosCarritoController::class, 'index']); // listar por uuid
+Route::post('/carrito/invitado/agregar', [ProductosCarritoController::class, 'agregarInvitado']);
+Route::post('/carrito/invitado/vaciar', [ProductosCarritoController::class, 'vaciarPorUuid']);
+Route::get('/carrito/uuid/{uuid}', [ProductosCarritoController::class, 'getCartByUuid']);
+
+// actualizar / eliminar productos del carrito (comparten lógica)
 Route::put('/carrito-actualizar/{carritoId}/{productoId}', [ProductosCarritoController::class, 'actualizar']);
 Route::delete('/carrito-eliminar/{carritoId}/{productoId}', [ProductosCarritoController::class, 'eliminar']);
-Route::post('/carrito/vaciar', [ProductosCarritoController::class, 'vaciar']);
-Route::post('/carrito/transferir', [ProductosCarritoController::class, 'transferirCarrito']);
-Route::get('/carrito/uuid/{uuid}', [ProductosCarritoController::class, 'getCartByUuid']);
 
 // ------------------------
 // Rutas protegidas con auth
@@ -105,9 +107,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/pedidos/{userId}', [Pedido::class, 'getPedidosByUserId']);
     Route::post('/pedido-programado', [PedidoProgramadoController::class, 'store']);
 
-    // CARRITO
-    Route::post('/carrito/merge', [ProductosCarritoController::class, 'mergeCart']);
+    // =============================
+    // 🔹 Carrito para usuario logueado
+    // =============================
+    Route::post('/carrito/user/agregar', [ProductosCarritoController::class, 'agregarUser']);
+    Route::post('/carrito/user/vaciar', [ProductosCarritoController::class, 'vaciarPorUserId']);
     Route::get('/carrito/user/{userId}', [ProductosCarritoController::class, 'getCartByUserId']);
+
+    // Merge carrito invitado -> user
+    Route::post('/carrito/merge', [ProductosCarritoController::class, 'mergeCart']);
 
     // DELIVERY
     Route::put('/modificar-estado-pedido', [Delivery::class, 'updatePedidoEstado']);
