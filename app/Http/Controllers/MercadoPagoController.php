@@ -13,11 +13,12 @@ use MercadoPago\SDK;
 use MercadoPago\Item;
 use MercadoPago\Preference;
 use MercadoPago\Payment;
+use MercadoPago\MerchantOrder;
 
 class MercadoPagoController extends Controller
 {
     /**
-     * Crea una preferencia de Mercado Pago a partir del carrito del usuario.
+     * Crear preferencia de pago en MercadoPago.
      */
     public function crearPreferencia(Request $request)
     {
@@ -28,7 +29,6 @@ class MercadoPagoController extends Controller
             'hora_programada'   => 'nullable|date_format:H:i',
         ]);
 
-        // Credenciales
         SDK::setAccessToken(config('services.mercadopago.token'));
 
         // Obtener carrito con productos
@@ -83,38 +83,62 @@ class MercadoPagoController extends Controller
     }
 
     /**
-     * Webhook para procesar pagos de Mercado Pago.
+     * Webhook de MercadoPago (payment o merchant_order).
      */
     public function webhook(Request $request)
     {
         $data = $request->all();
         Log::info('Webhook MercadoPago recibido', ['data' => $data]);
 
-        if (data_get($data, 'type') !== 'payment') {
-            return response()->json(['msg' => 'not payment event'], 200);
-        }
-
-        $paymentId = data_get($data, 'data.id');
-        if (!$paymentId) {
-            return response()->json(['msg' => 'no payment id'], 200);
-        }
+        $topic = $data['topic'] ?? $data['type'] ?? null;
 
         SDK::setAccessToken(config('services.mercadopago.token'));
+
+        if ($topic === 'payment') {
+            $paymentId = data_get($data, 'data.id');
+            if ($paymentId) {
+                $this->procesarPago($paymentId);
+            }
+        }
+
+        if ($topic === 'merchant_order') {
+            $orderId = $data['id'] ?? null;
+            if ($orderId) {
+                $order = MerchantOrder::find_by_id($orderId);
+                if ($order && $order->payments) {
+                    foreach ($order->payments as $pay) {
+                        if ($pay['status'] === 'approved') {
+                            $this->procesarPago($pay['id']);
+                        }
+                    }
+                }
+            }
+        }
+
+        return response()->json(['msg' => 'ok'], 200);
+    }
+
+    /**
+     * Procesar pago aprobado y crear pedido.
+     */
+    private function procesarPago($paymentId)
+    {
         $payment = Payment::find_by_id($paymentId);
 
         if (!$payment || $payment->status !== 'approved') {
-            return response()->json(['msg' => 'not approved'], 200);
+            Log::warning('Pago no aprobado', ['paymentId' => $paymentId]);
+            return;
         }
 
-        // ⚠️ Evitar duplicados: si ya existe un pago con ese id, no crear de nuevo
+        // Evitar duplicados
         if (Pago::where('mp_payment_id', $payment->id)->exists()) {
             Log::warning("Pago duplicado detectado, id={$payment->id}");
-            return response()->json(['msg' => 'duplicate payment ignored'], 200);
+            return;
         }
 
-        // Obtener metadata de la preferencia
+        // Metadata
         $pref = Preference::find_by_id($payment->preference_id);
-        $meta = (array) $pref->metadata;
+        $meta = (array) ($pref->metadata ?? []);
 
         // Crear pedido
         $pedido = Pedido::create([
@@ -128,7 +152,7 @@ class MercadoPagoController extends Controller
             'hora_programada'   => $meta['hora_programada'] ?? null,
         ]);
 
-        // Crear detalles desde carrito
+        // Detalles desde carrito
         $carritos = Carrito::with('productos')
             ->where('user_id', $pedido->user_id)
             ->get();
@@ -165,10 +189,8 @@ class MercadoPagoController extends Controller
         // Vaciar carrito
         Carrito::where('user_id', $pedido->user_id)->delete();
 
-        Log::info("Pedido {$pedido->id} creado con pago aprobado", [
+        Log::info("✅ Pedido {$pedido->id} creado con pago aprobado", [
             'mp_payment_id' => $payment->id,
         ]);
-
-        return response()->json(['msg' => 'ok'], 200);
     }
 }
