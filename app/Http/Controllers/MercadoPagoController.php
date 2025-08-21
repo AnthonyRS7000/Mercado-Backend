@@ -93,21 +93,29 @@ class MercadoPagoController extends Controller
 
         SDK::setAccessToken(config('services.mercadopago.token'));
 
-        // Solo procesar webhooks de payment, ignorar merchant_order para evitar duplicados
+        // Solo procesar webhooks de payment
         if ($topic === 'payment') {
             $paymentId = data_get($data, 'data.id') ?? data_get($data, 'id');
             Log::info("🔔 Procesando webhook de tipo payment", ['paymentId' => $paymentId]);
 
             if ($paymentId) {
-                // Usar transacción con bloqueo para evitar race conditions
+                // Verificación simple de duplicados recientes
+                $procesamientoReciente = Pago::where('mp_payment_id', $paymentId)
+                    ->where('created_at', '>', now()->subMinutes(2))
+                    ->exists();
+
+                if ($procesamientoReciente) {
+                    Log::info("🔒 Pago procesado recientemente, omitiendo", ['paymentId' => $paymentId]);
+                    return response()->json(['msg' => 'already_processed'], 200);
+                }
+
                 try {
-                    DB::transaction(function () use ($paymentId) {
-                        $this->procesarPago($paymentId);
-                    }, 3); // 3 intentos máximo
+                    $this->procesarPago($paymentId);
                 } catch (\Exception $e) {
-                    Log::error("❌ Error en transacción de pago", [
+                    Log::error("❌ Error procesando pago", [
                         'paymentId' => $paymentId,
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
                     ]);
                 }
             }
@@ -132,9 +140,13 @@ class MercadoPagoController extends Controller
     {
         Log::info("🔎 Iniciando procesamiento de pago", ['paymentId' => $paymentId]);
 
-        // Verificar si ya existe un pago procesado (evitar duplicados)
-        if (Pago::where('mp_payment_id', $paymentId)->exists()) {
-            Log::warning("⚠️ Pago ya procesado anteriormente, se omite", ['paymentId' => $paymentId]);
+        // PRIMERA VERIFICACIÓN: Evitar duplicados desde el inicio
+        $pagoExistente = Pago::where('mp_payment_id', $paymentId)->first();
+        if ($pagoExistente) {
+            Log::warning("⚠️ Pago ya procesado anteriormente, se omite", [
+                'paymentId' => $paymentId,
+                'pedidoId' => $pagoExistente->pedido_id
+            ]);
             return;
         }
 
@@ -230,16 +242,14 @@ class MercadoPagoController extends Controller
         }
 
         // --------------------------------------
-        // Verificar si ya existe un pedido para este pago
+        // Verificar si ya existe un pedido para este pago (método alternativo)
         // --------------------------------------
-        $pedidoExistente = Pedido::whereHas('pagos', function($query) use ($paymentId) {
-            $query->where('mp_payment_id', $paymentId);
-        })->first();
+        $pagoExistente = Pago::where('mp_payment_id', $paymentId)->first();
 
-        if ($pedidoExistente) {
+        if ($pagoExistente) {
             Log::warning("⚠️ Ya existe un pedido para este pago", [
                 'paymentId' => $paymentId,
-                'pedidoId' => $pedidoExistente->id
+                'pedidoId' => $pagoExistente->pedido_id
             ]);
             return;
         }

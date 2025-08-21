@@ -7,8 +7,8 @@ use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Models\Cliente;
 use App\Models\User;
+use App\Models\PersonalSistema;
 use App\Models\DetallesPedido;
-
 
 class Pedido extends Model
 {
@@ -23,6 +23,11 @@ class Pedido extends Model
         return $this->hasMany(DetallesPedido::class, 'pedido_id');
     }
 
+    // AGREGAR ESTA RELACIÓN
+    public function pagos()
+    {
+        return $this->hasMany(Pago::class, 'pedido_id');
+    }
 
     public function metodo_pago()
     {
@@ -39,17 +44,15 @@ class Pedido extends Model
         return $this->hasOne(Cliente::class, 'user_id', 'user_id');
     }
 
-
     public function personalSistema()
     {
-        return $this->belongsTo(Personal_Sistema::class, 'personal_sistema_id');
+        return $this->belongsTo(PersonalSistema::class, 'personal_sistema_id');
     }
 
     public function delivery()
     {
         return $this->belongsTo(Delivery::class, 'personal_sistema_id');
     }
-
 
     public function proveedores()
     {

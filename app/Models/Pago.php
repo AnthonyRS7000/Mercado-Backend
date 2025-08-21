@@ -12,6 +12,7 @@ class Pago extends Model
         'pedido_id',
         'user_id',
         'monto',
+        'metodo_pago', // AGREGAR ESTE CAMPO
         // Mercado Pago fields:
         'mp_payment_id',
         'mp_preference_id',
