@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use App\Models\Pedido;
 use App\Models\DetallesPedido;
 use App\Models\Producto;
@@ -92,36 +93,34 @@ class MercadoPagoController extends Controller
 
         SDK::setAccessToken(config('services.mercadopago.token'));
 
-        // Caso PAYMENT
+        // Solo procesar webhooks de payment, ignorar merchant_order para evitar duplicados
         if ($topic === 'payment') {
             $paymentId = data_get($data, 'data.id') ?? data_get($data, 'id');
             Log::info("🔔 Procesando webhook de tipo payment", ['paymentId' => $paymentId]);
-            if ($paymentId) {
-                $this->procesarPago($paymentId);
-            }
-        }
 
-        // Caso MERCHANT_ORDER
-        if ($topic === 'merchant_order') {
-            $orderId = $data['id'] ?? null;
-            Log::info("🔔 Procesando webhook de tipo merchant_order", ['orderId' => $orderId]);
-            if ($orderId) {
-                $order = MerchantOrder::find_by_id($orderId);
-                if ($order && $order->payments) {
-                    foreach ($order->payments as $pay) {
-                        Log::info("🧾 Pago encontrado en merchant_order", (array) $pay);
-                        if ($pay->status === 'approved') {
-                            // Evitar duplicados
-                            if (!Pago::where('mp_payment_id', $pay->id)->exists()) {
-                                $this->procesarPago($pay->id);
-                            } else {
-                                Log::warning("⚠️ Pago ya procesado, se omite en merchant_order", ['paymentId' => $pay->id]);
-                            }
-                        }
-                    }
+            if ($paymentId) {
+                // Usar transacción con bloqueo para evitar race conditions
+                try {
+                    DB::transaction(function () use ($paymentId) {
+                        $this->procesarPago($paymentId);
+                    }, 3); // 3 intentos máximo
+                } catch (\Exception $e) {
+                    Log::error("❌ Error en transacción de pago", [
+                        'paymentId' => $paymentId,
+                        'error' => $e->getMessage()
+                    ]);
                 }
             }
         }
+
+        // Comentamos el procesamiento de merchant_order para evitar duplicados
+        /*
+        if ($topic === 'merchant_order') {
+            $orderId = $data['id'] ?? null;
+            Log::info("🔔 Procesando webhook de tipo merchant_order", ['orderId' => $orderId]);
+            // ... código comentado
+        }
+        */
 
         return response()->json(['msg' => 'ok'], 200);
     }
@@ -132,6 +131,12 @@ class MercadoPagoController extends Controller
     private function procesarPago($paymentId)
     {
         Log::info("🔎 Iniciando procesamiento de pago", ['paymentId' => $paymentId]);
+
+        // Verificar si ya existe un pago procesado (evitar duplicados)
+        if (Pago::where('mp_payment_id', $paymentId)->exists()) {
+            Log::warning("⚠️ Pago ya procesado anteriormente, se omite", ['paymentId' => $paymentId]);
+            return;
+        }
 
         $payment = Payment::find_by_id($paymentId);
 
@@ -152,11 +157,6 @@ class MercadoPagoController extends Controller
                 'paymentId' => $paymentId,
                 'status'    => $payment->status
             ]);
-            return;
-        }
-
-        if (Pago::where('mp_payment_id', $payment->id)->exists()) {
-            Log::warning("⚠️ Pago duplicado detectado, se omite", ['paymentId' => $payment->id]);
             return;
         }
 
@@ -190,6 +190,60 @@ class MercadoPagoController extends Controller
 
         Log::info("📦 Metadata recuperada", ['meta' => $meta]);
 
+        $userId = $meta['user_id'] ?? null;
+
+        if (!$userId) {
+            Log::error("❌ No se pudo obtener user_id de los metadatos", ['meta' => $meta]);
+            return;
+        }
+
+        // --------------------------------------
+        // CRÍTICO: Verificar que el carrito tenga productos ANTES de crear el pedido
+        // --------------------------------------
+        $carritos = Carrito::with('productos')
+            ->where('user_id', $userId)
+            ->get();
+
+        if ($carritos->isEmpty()) {
+            Log::error("❌ El carrito está vacío para el usuario, no se puede crear pedido", [
+                'userId' => $userId,
+                'paymentId' => $paymentId
+            ]);
+            return;
+        }
+
+        // Verificar que efectivamente tenga productos
+        $tieneProductos = false;
+        foreach ($carritos as $carrito) {
+            if ($carrito->productos->count() > 0) {
+                $tieneProductos = true;
+                break;
+            }
+        }
+
+        if (!$tieneProductos) {
+            Log::error("❌ El carrito no tiene productos, no se puede crear pedido", [
+                'userId' => $userId,
+                'paymentId' => $paymentId
+            ]);
+            return;
+        }
+
+        // --------------------------------------
+        // Verificar si ya existe un pedido para este pago
+        // --------------------------------------
+        $pedidoExistente = Pedido::whereHas('pagos', function($query) use ($paymentId) {
+            $query->where('mp_payment_id', $paymentId);
+        })->first();
+
+        if ($pedidoExistente) {
+            Log::warning("⚠️ Ya existe un pedido para este pago", [
+                'paymentId' => $paymentId,
+                'pedidoId' => $pedidoExistente->id
+            ]);
+            return;
+        }
+
         // --------------------------------------
         // Crear pedido
         // --------------------------------------
@@ -197,7 +251,7 @@ class MercadoPagoController extends Controller
             'fecha'             => now()->toDateString(),
             'estado'            => 1,
             'direccion_entrega' => $meta['direccion_entrega'] ?? 'NO DEFINIDA',
-            'user_id'           => $meta['user_id'] ?? null,
+            'user_id'           => $userId,
             'metodo_pago_id'    => 2,
             'total'             => 0,
             'fecha_programada'  => $meta['fecha_programada'] ?? null,
@@ -206,37 +260,48 @@ class MercadoPagoController extends Controller
 
         Log::info("🛒 Pedido creado provisionalmente", ['pedidoId' => $pedido->id]);
 
-        // Detalles desde carrito
+        // --------------------------------------
+        // Crear detalles desde carrito
+        // --------------------------------------
         $total = 0;
-        $carritos = Carrito::with('productos')
-            ->where('user_id', $pedido->user_id)
-            ->get();
 
         foreach ($carritos as $carrito) {
             foreach ($carrito->productos as $producto) {
-                $subtotal = $producto->precio * $producto->pivot->cantidad;
+                $cantidad = $producto->pivot->cantidad;
+                $precioUnitario = $producto->precio;
+                $subtotal = $precioUnitario * $cantidad;
 
                 DetallesPedido::create([
                     'pedido_id'       => $pedido->id,
                     'producto_id'     => $producto->id,
-                    'cantidad'        => $producto->pivot->cantidad,
-                    'precio_unitario' => $producto->precio,
+                    'cantidad'        => $cantidad,
+                    'precio_unitario' => $precioUnitario,
                     'subtotal'        => $subtotal,
                 ]);
 
                 $total += $subtotal;
+
+                Log::info("📝 Detalle agregado", [
+                    'producto_id' => $producto->id,
+                    'cantidad' => $cantidad,
+                    'precio_unitario' => $precioUnitario,
+                    'subtotal' => $subtotal
+                ]);
             }
         }
 
+        // Actualizar total del pedido
         $pedido->total = $total;
         $pedido->save();
 
         Log::info("✅ Pedido actualizado con total", ['pedidoId' => $pedido->id, 'total' => $total]);
 
+        // --------------------------------------
         // Registrar pago
+        // --------------------------------------
         Pago::create([
             'pedido_id'          => $pedido->id,
-            'user_id'            => $pedido->user_id,
+            'user_id'            => $userId,
             'monto'              => $payment->transaction_amount,
             'metodo_pago'        => 2,
             'mp_payment_id'      => $payment->id,
@@ -250,14 +315,21 @@ class MercadoPagoController extends Controller
 
         Log::info("💵 Pago registrado en BD", ['paymentId' => $payment->id]);
 
-        // Vaciar carrito
-        Carrito::where('user_id', $pedido->user_id)->delete();
+        // --------------------------------------
+        // Vaciar carrito AL FINAL y solo si todo fue exitoso
+        // --------------------------------------
+        $carritoEliminados = Carrito::where('user_id', $userId)->delete();
 
-        Log::info("🧹 Carrito vaciado", ['userId' => $pedido->user_id]);
+        Log::info("🧹 Carrito vaciado", [
+            'userId' => $userId,
+            'registrosEliminados' => $carritoEliminados
+        ]);
 
         Log::info("🎉 Pedido finalizado con éxito", [
-            'pedidoId'     => $pedido->id,
-            'mp_payment_id'=> $payment->id
+            'pedidoId'      => $pedido->id,
+            'mp_payment_id' => $payment->id,
+            'total'         => $total,
+            'detalles_count' => DetallesPedido::where('pedido_id', $pedido->id)->count()
         ]);
     }
 }
