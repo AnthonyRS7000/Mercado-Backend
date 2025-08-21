@@ -108,8 +108,8 @@ class MercadoPagoController extends Controller
                 if ($order && $order->payments) {
                     foreach ($order->payments as $pay) {
                         Log::info("Pago encontrado en merchant_order", (array) $pay);
-                        if ($pay['status'] === 'approved') {
-                            $this->procesarPago($pay['id']);
+                        if ($pay->status === 'approved') {
+                            $this->procesarPago($pay->id);
                         }
                     }
                 }
@@ -152,7 +152,7 @@ class MercadoPagoController extends Controller
 
         // Recuperar metadata
         $meta = [];
-        $prefId = $payment->preference_id ?? ($payment->order->id ?? null);
+        $prefId = $payment->preference_id; // ✅ usar solo preference_id
 
         try {
             Log::info("Buscando preferencia asociada", ['prefId' => $prefId]);
@@ -161,9 +161,6 @@ class MercadoPagoController extends Controller
                 $pref = Preference::find_by_id($prefId);
                 if ($pref && isset($pref->metadata)) {
                     $meta = (array) $pref->metadata;
-                    if (isset($meta['stdClass'])) {
-                        $meta = (array) $meta['stdClass'];
-                    }
                 }
             }
         } catch (\Exception $e) {
