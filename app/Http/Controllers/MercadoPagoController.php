@@ -140,19 +140,20 @@ class MercadoPagoController extends Controller
         $pref = Preference::find_by_id($payment->preference_id);
         $meta = (array) ($pref->metadata ?? []);
 
-        // Crear pedido
+        // Crear pedido con total=0 (lo actualizamos luego)
         $pedido = Pedido::create([
             'fecha'             => now()->toDateString(),
             'estado'            => 1, // pendiente
             'direccion_entrega' => $meta['direccion_entrega'] ?? null,
             'user_id'           => $meta['user_id'] ?? null,
             'metodo_pago_id'    => 2, // Mercado Pago
-            'total'             => $payment->transaction_amount,
+            'total'             => 0,
             'fecha_programada'  => $meta['fecha_programada'] ?? null,
             'hora_programada'   => $meta['hora_programada'] ?? null,
         ]);
 
         // Detalles desde carrito
+        $total = 0;
         $carritos = Carrito::with('productos')
             ->where('user_id', $pedido->user_id)
             ->get();
@@ -168,8 +169,14 @@ class MercadoPagoController extends Controller
                     'precio_unitario' => $producto->precio,
                     'subtotal'        => $subtotal,
                 ]);
+
+                $total += $subtotal;
             }
         }
+
+        // Actualizar total calculado
+        $pedido->total = $total;
+        $pedido->save();
 
         // Registrar pago
         Pago::create([
