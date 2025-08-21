@@ -31,7 +31,7 @@ class MercadoPagoController extends Controller
         // Credenciales
         SDK::setAccessToken(config('services.mercadopago.token'));
 
-        // Obtener carrito real con productos
+        // Obtener carrito con productos
         $carritos = Carrito::with('productos')
             ->where('user_id', $request->user_id)
             ->get();
@@ -40,13 +40,13 @@ class MercadoPagoController extends Controller
             return response()->json(['error' => 'El carrito está vacío'], 400);
         }
 
-        // Construir items desde BD
+        // Construir items
         $items = [];
         foreach ($carritos as $carrito) {
             foreach ($carrito->productos as $producto) {
                 $item = new Item();
                 $item->title       = $producto->nombre;
-                $item->quantity    = (int) $producto->pivot->cantidad; // 👈 desde tabla pivote
+                $item->quantity    = (int) $producto->pivot->cantidad;
                 $item->unit_price  = (float) $producto->precio;
                 $item->currency_id = 'PEN';
                 $items[] = $item;
@@ -57,9 +57,9 @@ class MercadoPagoController extends Controller
         $pref = new Preference();
         $pref->items = $items;
         $pref->back_urls = [
-            'success' => config('app.frontend_url') . '/pago-exitoso',
-            'failure' => config('app.frontend_url') . '/pago-fallido',
-            'pending' => config('app.frontend_url') . '/pago-pendiente',
+            'success' => config('app.frontend_url') . '/mp/success',
+            'failure' => config('app.frontend_url') . '/mp/failure',
+            'pending' => config('app.frontend_url') . '/mp/pending',
         ];
         $pref->auto_return = 'approved';
         $pref->metadata = [
@@ -71,14 +71,14 @@ class MercadoPagoController extends Controller
         $pref->notification_url = config('app.url') . '/api/mp/webhook';
         $pref->save();
 
-        Log::info('Preferencia creada', [
-            'pref_id' => $pref->id,
-            'init_point' => $pref->init_point
+        Log::info('Preferencia creada en MercadoPago', [
+            'pref_id'    => $pref->id,
+            'init_point' => $pref->init_point,
         ]);
 
         return response()->json([
             'preference_id' => $pref->id,
-            'init_point'    => $pref->init_point
+            'init_point'    => $pref->init_point,
         ], 200);
     }
 
@@ -88,7 +88,7 @@ class MercadoPagoController extends Controller
     public function webhook(Request $request)
     {
         $data = $request->all();
-        Log::info('Webhook MP', ['data' => $data]);
+        Log::info('Webhook MercadoPago recibido', ['data' => $data]);
 
         if (data_get($data, 'type') !== 'payment') {
             return response()->json(['msg' => 'not payment event'], 200);
@@ -106,6 +106,12 @@ class MercadoPagoController extends Controller
             return response()->json(['msg' => 'not approved'], 200);
         }
 
+        // ⚠️ Evitar duplicados: si ya existe un pago con ese id, no crear de nuevo
+        if (Pago::where('mp_payment_id', $payment->id)->exists()) {
+            Log::warning("Pago duplicado detectado, id={$payment->id}");
+            return response()->json(['msg' => 'duplicate payment ignored'], 200);
+        }
+
         // Obtener metadata de la preferencia
         $pref = Preference::find_by_id($payment->preference_id);
         $meta = (array) $pref->metadata;
@@ -113,7 +119,7 @@ class MercadoPagoController extends Controller
         // Crear pedido
         $pedido = Pedido::create([
             'fecha'             => now()->toDateString(),
-            'estado'            => 1,
+            'estado'            => 1, // pendiente
             'direccion_entrega' => $meta['direccion_entrega'] ?? null,
             'user_id'           => $meta['user_id'] ?? null,
             'metodo_pago_id'    => 2, // Mercado Pago
@@ -122,7 +128,7 @@ class MercadoPagoController extends Controller
             'hora_programada'   => $meta['hora_programada'] ?? null,
         ]);
 
-        // Crear detalles del pedido desde carrito
+        // Crear detalles desde carrito
         $carritos = Carrito::with('productos')
             ->where('user_id', $pedido->user_id)
             ->get();
@@ -143,21 +149,25 @@ class MercadoPagoController extends Controller
 
         // Registrar pago
         Pago::create([
-            'pedido_id'         => $pedido->id,
-            'user_id'           => $pedido->user_id,
-            'monto'             => $payment->transaction_amount,
-            'metodo_pago'       => 2,
-            'mp_payment_id'     => $payment->id,
-            'mp_preference_id'  => $payment->preference_id,
-            'mp_status'         => $payment->status,
-            'mp_status_detail'  => $payment->status_detail,
-            'mp_payment_type_id'=> $payment->payment_type_id,
-            'mp_installments'   => $payment->installments,
-            'mp_raw_response'   => json_encode($payment),
+            'pedido_id'          => $pedido->id,
+            'user_id'            => $pedido->user_id,
+            'monto'              => $payment->transaction_amount,
+            'metodo_pago'        => 2,
+            'mp_payment_id'      => $payment->id,
+            'mp_preference_id'   => $payment->preference_id,
+            'mp_status'          => $payment->status,
+            'mp_status_detail'   => $payment->status_detail,
+            'mp_payment_type_id' => $payment->payment_type_id,
+            'mp_installments'    => $payment->installments,
+            'mp_raw_response'    => json_encode($payment),
         ]);
 
-        // Vaciar carrito después del pedido
+        // Vaciar carrito
         Carrito::where('user_id', $pedido->user_id)->delete();
+
+        Log::info("Pedido {$pedido->id} creado con pago aprobado", [
+            'mp_payment_id' => $payment->id,
+        ]);
 
         return response()->json(['msg' => 'ok'], 200);
     }
