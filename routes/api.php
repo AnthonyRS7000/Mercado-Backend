@@ -89,11 +89,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // PRODUCTOS
     Route::get('/productos/{id}', [Producto::class, 'show']);
     Route::post('/productos', [Producto::class, 'store']);
-    Route::post('/producto/{id}', [Producto::class, 'update']);
+    Route::post('/actualizarelproducto/{id}', [Producto::class, 'update']);
     Route::delete('/productos/{id}', [Producto::class, 'destroy']);
     Route::post('/compra-peso/{id}', [Producto::class, 'compra_peso']);
     Route::post('/compra-unidad/{id}', [Producto::class, 'compra_unidad']);
     Route::get('/productos-categoria/{id}', [Producto::class, 'productosPorCategoria']);
+    Route::put('/productos/desactivar/{id}', [Producto::class, 'desactivar']);
+    Route::put('/productos/activar/{id}', [Producto::class, 'activar']);
 
     // MERCADO PAGO
     Route::post('/mercadopago/preferencia', [MercadoPagoController::class, 'crearPreferencia']);

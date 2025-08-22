@@ -12,7 +12,10 @@ class ProductoController extends Controller
 {
     public function index()
     {
-        $productos = Producto::with('categoria')->get();
+        $productos = Producto::with('categoria')
+            ->where('estado', 1)   // 👈 Solo productos activos
+            ->get();
+
         return response()->json($productos, 200);
     }
 
@@ -109,59 +112,64 @@ class ProductoController extends Controller
     }
 
     public function update(Request $request, $id)
-    {
-        $producto = Producto::find($id);
+{
+    $producto = Producto::find($id);
 
-        if (!$producto) {
-            return response()->json(['error' => 'Producto no encontrado.'], 404);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'nombre'        => 'sometimes|required|string|max:255',
-            'descripcion'   => 'sometimes|required|string|max:255',
-            'estado'        => 'sometimes|required|integer',
-            'stock'         => 'sometimes|required|integer',
-            'precio'        => 'sometimes|required|numeric',
-            'categoria_id'  => 'sometimes|required|exists:categorias,id',
-            'proveedor_id'  => 'sometimes|required|exists:proveedors,id',
-            'imagen'        => 'nullable|file|max:2048',
-            'tipo'          => 'sometimes|required|in:peso,unidad',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        if ($request->hasFile('imagen')) {
-            $file = $request->file('imagen');
-            $mimeType = $file->getClientMimeType();
-            $validMimeTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/svg+xml'];
-            if (!in_array($mimeType, $validMimeTypes)) {
-                return response()->json(['errors' => ['imagen' => 'El tipo de archivo no es permitido']], 422);
-            }
-
-            if ($producto->imagen && Storage::disk('public')->exists(str_replace('/storage/', '', $producto->imagen))) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $producto->imagen));
-            }
-
-            $imagenPath = $file->store('imagenes', 'public');
-            $producto->imagen = Storage::url($imagenPath);
-        }
-
-        foreach (['nombre', 'descripcion', 'estado', 'stock', 'precio', 'categoria_id', 'proveedor_id', 'tipo'] as $campo) {
-            if ($request->has($campo)) {
-                $producto->{$campo} = $request->{$campo};
-            }
-        }
-
-        $producto->save();
-
-        return response()->json($producto, 200);
+    if (!$producto) {
+        return response()->json(['error' => 'Producto no encontrado.'], 404);
     }
 
-    /**
-     * Listar productos por proveedor.
-     */
+    $validator = Validator::make($request->all(), [
+        'nombre'        => 'sometimes|required|string|max:255',
+        'descripcion'   => 'sometimes|required|string|max:255',
+        'estado'        => 'sometimes|required|integer',
+        'stock'         => 'sometimes|required|integer',
+        'precio'        => 'sometimes|required|numeric',
+        'categoria_id'  => 'sometimes|required|exists:categorias,id',
+        'proveedor_id'  => 'sometimes|required|exists:proveedors,id',
+        'imagen'        => 'nullable|file|max:2048',
+        'imagen_url'    => 'nullable|string|max:500', // 👈 ahora acepta url
+        'tipo'          => 'sometimes|required|in:peso,unidad',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    // Caso 1: archivo subido
+    if ($request->hasFile('imagen')) {
+        $file = $request->file('imagen');
+        $mimeType = $file->getClientMimeType();
+        $validMimeTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/svg+xml'];
+
+        if (!in_array($mimeType, $validMimeTypes)) {
+            return response()->json(['errors' => ['imagen' => 'El tipo de archivo no es permitido']], 422);
+        }
+
+        if ($producto->imagen && Storage::disk('public')->exists(str_replace('/storage/', '', $producto->imagen))) {
+            Storage::disk('public')->delete(str_replace('/storage/', '', $producto->imagen));
+        }
+
+        $imagenPath = $file->store('imagenes', 'public');
+        $producto->imagen = Storage::url($imagenPath);
+
+    // Caso 2: url existente (ya recortada o tomada de BD)
+    } elseif ($request->filled('imagen_url')) {
+        $producto->imagen = $request->imagen_url;
+    }
+
+    // Actualizar otros campos
+    foreach (['nombre', 'descripcion', 'estado', 'stock', 'precio', 'categoria_id', 'proveedor_id', 'tipo'] as $campo) {
+        if ($request->has($campo)) {
+            $producto->{$campo} = $request->{$campo};
+        }
+    }
+
+    $producto->save();
+
+    return response()->json($producto, 200);
+}
+
     public function productosPorProveedor($proveedor_id)
     {
         $productos = Producto::with('categoria')
@@ -238,4 +246,47 @@ class ProductoController extends Controller
             'relacionados'=> $relacionados
         ], 200);
     }
+
+    public function desactivar($id)
+    {
+        $producto = Producto::find($id);
+
+        if (!$producto) {
+            return response()->json(['error' => 'Producto no encontrado.'], 404);
+        }
+
+        try {
+            $producto->estado = 0; // 👈 Cambiamos el estado a 0
+            $producto->save();
+
+            return response()->json([
+                'message' => 'Producto desactivado exitosamente.',
+                'producto' => $producto
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Ocurrió un error al desactivar el producto.'], 500);
+        }
+    }
+
+    public function activar($id)
+    {
+        $producto = Producto::find($id);
+
+        if (!$producto) {
+            return response()->json(['error' => 'Producto no encontrado.'], 404);
+        }
+
+        try {
+            $producto->estado = 1; // 👈 Cambiamos el estado a 1 (activo)
+            $producto->save();
+
+            return response()->json([
+                'message' => 'Producto activado exitosamente.',
+                'producto' => $producto
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Ocurrió un error al activar el producto.'], 500);
+        }
+    }
 }
+
