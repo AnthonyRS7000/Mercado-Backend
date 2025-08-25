@@ -111,6 +111,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/pedidos/{userId}', [Pedido::class, 'getPedidosByUserId']);
     Route::post('/pedido-programado', [PedidoProgramadoController::class, 'store']);
 
+    //GOOGLE
+    Route::post('/cliente/completar', [GoogleAuthController::class, 'completarDatos']);
+
     // =============================
     // 🔹 Carrito para usuario logueado
     // =============================

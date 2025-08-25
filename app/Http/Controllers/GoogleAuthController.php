@@ -194,4 +194,38 @@ class GoogleAuthController extends Controller
             ], 500);
         }
     }
+
+    // GoogleAuthController.php
+    public function completarDatos(Request $request)
+    {
+        $request->validate([
+            'dni'       => 'required|string|max:15',
+            'celular'   => 'required|string|max:20',
+            'direccion' => 'required|string|max:255',
+        ]);
+
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json(['error' => 'Usuario no autenticado'], 401);
+        }
+
+        $cliente = $user->cliente;
+        if (!$cliente) {
+            return response()->json(['error' => 'Cliente no encontrado'], 404);
+        }
+
+        $cliente->update([
+            'dni'       => $request->dni,
+            'celular'   => $request->celular,
+            'direccion' => $request->direccion,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Datos completados correctamente',
+            'cliente' => $cliente
+        ]);
+    }
+
 }
