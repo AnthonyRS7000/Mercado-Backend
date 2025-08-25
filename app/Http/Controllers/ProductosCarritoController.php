@@ -8,6 +8,9 @@ use App\Models\Producto;
 use App\Models\Carrito;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
 
 class ProductosCarritoController extends Controller
 {
@@ -151,6 +154,64 @@ class ProductosCarritoController extends Controller
 
         return response()->json(['message' => 'Cantidad actualizada', 'carrito' => $item], 200);
     }
+
+    public function incrementar(Request $request, $carritoId, $productoId)
+    {
+        $validated = $request->validate([
+            'delta' => 'required|integer', // 👈 ya no 'in:-1,1'
+        ]);
+
+        return DB::transaction(function () use ($carritoId, $productoId, $validated) {
+            $item = productos_carrito::with('producto')
+                ->where('carrito_id', $carritoId)
+                ->where('producto_id', $productoId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$item) {
+                return response()->json(['message' => 'Producto no encontrado en el carrito'], 404);
+            }
+
+            $producto = Producto::find($productoId);
+            if (!$producto) {
+                return response()->json(['message' => 'Producto no encontrado'], 404);
+            }
+
+            $cantidadActual = (int) $item->cantidad;
+            $nuevaCantidad = $cantidadActual + $validated['delta'];
+
+            // Para productos por unidad: mínimo 1
+            if ($item->producto && $item->producto->tipo === 'unidad') {
+                $nuevaCantidad = max(1, $nuevaCantidad);
+            }
+
+            $item->cantidad = $nuevaCantidad;
+            $item->total = $producto->precio * $nuevaCantidad;
+            $item->fecha_agrego = now();
+            $item->save();
+
+            $sum = productos_carrito::where('carrito_id', $carritoId)
+                ->selectRaw('SUM(cantidad) as cantidad_total, SUM(total) as total_precio')
+                ->first();
+
+            return response()->json([
+                'message' => 'Cantidad actualizada',
+                'item' => [
+                    'id' => $item->id,
+                    'producto_id' => $item->producto_id,
+                    'cantidad' => $item->cantidad,
+                    'producto' => $item->producto,
+                    'total' => $item->total,
+                ],
+                'resumen' => [
+                    'cantidad_total' => (float) ($sum->cantidad_total ?? 0),
+                    'total_precio'   => (float) ($sum->total_precio ?? 0),
+                ],
+            ], 200);
+        });
+    }
+
+
 
     // =============================
     // ELIMINAR PRODUCTO DEL CARRITO

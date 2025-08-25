@@ -59,6 +59,8 @@ Route::get('/carrito', [ProductosCarritoController::class, 'index']); // listar 
 Route::post('/carrito/invitado/agregar', [ProductosCarritoController::class, 'agregarInvitado']);
 Route::post('/carrito/invitado/vaciar', [ProductosCarritoController::class, 'vaciarPorUuid']);
 Route::get('/carrito/uuid/{uuid}', [ProductosCarritoController::class, 'getCartByUuid']);
+Route::patch('/carrito-incrementar/{carritoId}/{productoId}', [ProductosCarritoController::class, 'incrementar'])
+    ->middleware('throttle:60,1');
 
 // actualizar / eliminar productos del carrito (comparten lógica)
 Route::put('/carrito-actualizar/{carritoId}/{productoId}', [ProductosCarritoController::class, 'actualizar']);
