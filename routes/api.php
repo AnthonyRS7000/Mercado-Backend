@@ -18,6 +18,7 @@ use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\SolicitudRegistroController;
 use App\Http\Controllers\ImagenController;
+use App\Http\Controllers\FlyerController;
 
 /*
 |--------------------------------------------------------------------------
@@ -114,9 +115,10 @@ Route::middleware('auth:sanctum')->group(function () {
     //GOOGLE
     Route::post('/cliente/completar', [GoogleAuthController::class, 'completarDatos']);
 
-    // =============================
+    // FLYERS
+    Route::post('/flyers', [FlyerController::class, 'store']);
+
     // 🔹 Carrito para usuario logueado
-    // =============================
     Route::post('/carrito/user/agregar', [ProductosCarritoController::class, 'agregarUser']);
     Route::post('/carrito/user/vaciar', [ProductosCarritoController::class, 'vaciarPorUserId']);
     Route::get('/carrito/user/{userId}', [ProductosCarritoController::class, 'getCartByUserId']);
