@@ -3,10 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Flyer;
-use App\Models\Producto;
-use App\Models\Proveedor;
-use App\Models\FlyerProducto;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -16,11 +12,12 @@ class FlyerController extends Controller
 {
     public function index()
     {
+        $now = Carbon::now('America/Lima');
+
         $flyers = Flyer::with(['proveedor', 'producto'])
             ->where('estado', 1)
-            ->where(function($q){
-                $q->whereNull('fecha_fin')->orWhere('fecha_fin', '>=', now());
-            })
+            ->where('fecha_inicio', '<=', $now)
+            ->where('fecha_fin', '>=', $now)
             ->get();
 
         return response()->json($flyers, 200);
@@ -57,11 +54,10 @@ class FlyerController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // ✅ Validar fechas con Carbon
-        $fechaInicio = Carbon::parse($request->fecha_inicio);
-        $fechaFin = Carbon::parse($request->fecha_fin);
+        $fechaInicio = Carbon::parse($request->fecha_inicio, 'America/Lima');
+        $fechaFin = Carbon::parse($request->fecha_fin, 'America/Lima');
 
-        if ($fechaInicio->lt(Carbon::now())) {
+        if ($fechaInicio->lt(Carbon::now('America/Lima'))) {
             return response()->json(['error' => 'La fecha/hora de inicio no puede ser menor a la actual'], 422);
         }
 
@@ -69,7 +65,7 @@ class FlyerController extends Controller
             return response()->json(['error' => 'La fecha/hora de fin debe ser mayor que la de inicio'], 422);
         }
 
-        // ✅ Imagen
+        // Imagen
         $imagenUrl = null;
         if ($request->hasFile('imagen')) {
             $file = $request->file('imagen');
@@ -79,7 +75,7 @@ class FlyerController extends Controller
             $imagenUrl = $request->imagen_url;
         }
 
-        // ✅ Crear flyer
+        // Guardar flyer sin aplicar descuento aún
         $flyer = Flyer::create([
             'titulo'        => $request->titulo,
             'descripcion'   => $request->descripcion,
@@ -90,49 +86,8 @@ class FlyerController extends Controller
             'fecha_inicio'  => $fechaInicio,
             'fecha_fin'     => $fechaFin,
             'estado'        => $request->estado ?? 1,
+            'aplicado'      => 0,
         ]);
-
-        // ✅ Aplicar descuento
-        if ($flyer->producto_id) {
-            // Descuento a un solo producto
-            $producto = Producto::find($flyer->producto_id);
-            if ($producto) {
-                FlyerProducto::create([
-                    'flyer_id' => $flyer->id,
-                    'producto_id' => $producto->id,
-                    'precio_original' => $producto->precio,
-                ]);
-
-                $producto->precio = $producto->precio - ($producto->precio * ($flyer->descuento / 100));
-                $producto->save();
-            }
-        } else {
-            // Descuento a toda la tienda (requiere contraseña del proveedor)
-            if (!$request->filled('password')) {
-                return response()->json(['error' => 'Se requiere contraseña del proveedor para aplicar a toda la tienda'], 403);
-            }
-
-            $proveedor = Proveedor::with('user')->find($flyer->proveedor_id);
-            if (!$proveedor) {
-                return response()->json(['error' => 'Proveedor no encontrado.'], 404);
-            }
-
-            if (!Hash::check($request->password, $proveedor->user->password)) {
-                return response()->json(['error' => 'Contraseña incorrecta.'], 403);
-            }
-
-            $productos = Producto::where('proveedor_id', $proveedor->id)->get();
-            foreach ($productos as $p) {
-                FlyerProducto::create([
-                    'flyer_id' => $flyer->id,
-                    'producto_id' => $p->id,
-                    'precio_original' => $p->precio,
-                ]);
-
-                $p->precio = $p->precio - ($p->precio * ($flyer->descuento / 100));
-                $p->save();
-            }
-        }
 
         return response()->json($flyer, 201);
     }
@@ -161,24 +116,22 @@ class FlyerController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // ✅ Validar fechas si las envía
         if ($request->filled('fecha_inicio')) {
-            $fechaInicio = Carbon::parse($request->fecha_inicio);
-            if ($fechaInicio->lt(Carbon::now())) {
+            $fechaInicio = Carbon::parse($request->fecha_inicio, 'America/Lima');
+            if ($fechaInicio->lt(Carbon::now('America/Lima'))) {
                 return response()->json(['error' => 'La fecha/hora de inicio no puede ser menor a la actual'], 422);
             }
             $flyer->fecha_inicio = $fechaInicio;
         }
 
         if ($request->filled('fecha_fin')) {
-            $fechaFin = Carbon::parse($request->fecha_fin);
+            $fechaFin = Carbon::parse($request->fecha_fin, 'America/Lima');
             if ($flyer->fecha_inicio && $fechaFin->lt($flyer->fecha_inicio)) {
                 return response()->json(['error' => 'La fecha/hora de fin debe ser mayor que la de inicio'], 422);
             }
             $flyer->fecha_fin = $fechaFin;
         }
 
-        // ✅ Imagen
         if ($request->hasFile('imagen')) {
             if ($flyer->imagen && Storage::disk('public')->exists(str_replace('/storage/', '', $flyer->imagen))) {
                 Storage::disk('public')->delete(str_replace('/storage/', '', $flyer->imagen));
