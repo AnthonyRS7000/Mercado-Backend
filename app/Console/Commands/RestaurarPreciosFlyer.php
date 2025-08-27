@@ -11,13 +11,13 @@ use Carbon\Carbon;
 class RestaurarPreciosFlyer extends Command
 {
     protected $signature = 'flyers:restaurar';
-    protected $description = 'Activa y restaura flyers según fecha de inicio y fin';
+    protected $description = 'Aplica o restaura los precios de los productos según el estado de los flyers';
 
     public function handle()
     {
         $now = Carbon::now('America/Lima');
 
-        // 🔹 1. Aplicar descuento a flyers que ya comenzaron y aún no se aplicaron
+        // 🔹 1. Aplicar descuento a flyers que ya empezaron pero aún no se aplicaron
         $flyersToStart = Flyer::where('estado', 1)
             ->where('aplicado', 0)
             ->where('fecha_inicio', '<=', $now)
@@ -25,30 +25,26 @@ class RestaurarPreciosFlyer extends Command
             ->get();
 
         foreach ($flyersToStart as $flyer) {
-            if ($flyer->producto_id) {
-                $producto = Producto::find($flyer->producto_id);
-                if ($producto) {
-                    FlyerProducto::create([
-                        'flyer_id' => $flyer->id,
-                        'producto_id' => $producto->id,
-                        'precio_original' => $producto->precio,
-                    ]);
-                    $producto->precio = $producto->precio - ($producto->precio * ($flyer->descuento / 100));
-                    $producto->save();
-                }
-            } else {
-                foreach ($flyer->proveedor->productos as $p) {
-                    FlyerProducto::create([
-                        'flyer_id' => $flyer->id,
-                        'producto_id' => $p->id,
-                        'precio_original' => $p->precio,
-                    ]);
-                    $p->precio = $p->precio - ($p->precio * ($flyer->descuento / 100));
-                    $p->save();
-                }
+            $productos = $flyer->producto_id
+                ? Producto::where('id', $flyer->producto_id)->get()
+                : Producto::where('proveedor_id', $flyer->proveedor_id)->get();
+
+            foreach ($productos as $p) {
+                // Guardar precio original en flyer_productos
+                FlyerProducto::create([
+                    'flyer_id'        => $flyer->id,
+                    'producto_id'     => $p->id,
+                    'precio_original' => $p->precio,
+                ]);
+
+                // Aplicar descuento
+                $p->precio = $p->precio - ($p->precio * ($flyer->descuento / 100));
+                $p->save();
             }
+
             $flyer->aplicado = 1;
             $flyer->save();
+
             $this->info("Flyer {$flyer->id} aplicado.");
         }
 
@@ -59,9 +55,7 @@ class RestaurarPreciosFlyer extends Command
             ->get();
 
         foreach ($flyersToEnd as $flyer) {
-            $productos = FlyerProducto::where('flyer_id', $flyer->id)
-                ->with('producto')
-                ->get();
+            $productos = FlyerProducto::where('flyer_id', $flyer->id)->with('producto')->get();
 
             foreach ($productos as $fp) {
                 if ($fp->producto) {
@@ -70,7 +64,7 @@ class RestaurarPreciosFlyer extends Command
                 }
             }
 
-            $flyer->estado = 0; // desactivado
+            $flyer->estado = 0;
             $flyer->save();
 
             $this->info("Flyer {$flyer->id} restaurado y desactivado.");
