@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('titulo')->nullable();
             $table->text('descripcion')->nullable();
+            $table->integer('descuento')->nullable();
             $table->string('imagen')->nullable(); // ruta de la imagen subida o url
             $table->unsignedBigInteger('proveedor_id')->nullable();
             $table->unsignedBigInteger('producto_id')->nullable();
