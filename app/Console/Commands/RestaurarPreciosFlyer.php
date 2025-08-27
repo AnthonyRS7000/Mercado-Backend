@@ -14,12 +14,17 @@ class RestaurarPreciosFlyer extends Command
 
     public function handle()
     {
+        $now = Carbon::now('America/Lima');
+
         $flyers = Flyer::where('estado', 1)
-            ->where('fecha_fin', '<=', Carbon::now('America/Lima'))
+            ->where('fecha_inicio', '<=', $now) // ✅ asegurar que ya comenzó
+            ->where('fecha_fin', '<=', $now)    // ✅ y que ya terminó
             ->get();
 
         foreach ($flyers as $flyer) {
-            $productos = FlyerProducto::where('flyer_id', $flyer->id)->with('producto')->get();
+            $productos = FlyerProducto::where('flyer_id', $flyer->id)
+                ->with('producto')
+                ->get();
 
             foreach ($productos as $fp) {
                 if ($fp->producto) {
